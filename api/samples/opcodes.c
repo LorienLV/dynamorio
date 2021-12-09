@@ -41,6 +41,7 @@
 #include "drmgr.h"
 #include "drx.h"
 #include <stdlib.h> /* qsort */
+#include <string.h>
 
 #ifdef WINDOWS
 #    define DISPLAY_STRING(msg) dr_messagebox(msg)
@@ -70,7 +71,10 @@ enum {
 #endif
     NUM_ISA_MODE,
 };
-static uint count[NUM_ISA_MODE][OP_LAST + 1];
+static uint64 op_reads[NUM_ISA_MODE][OP_LAST + 1];
+static uint64 op_writes[NUM_ISA_MODE][OP_LAST + 1];
+static uint64 op_memory[4]; // 0-LD / 1-ST / 2-LD&ST / 3-None
+static uint64 count[NUM_ISA_MODE][OP_LAST + 1];
 #define NUM_COUNT sizeof(count[0]) / sizeof(count[0][0])
 /* We only display the top 15 counts.  This sample could be extended to
  * write all the counts to a file.
@@ -80,7 +84,7 @@ static uint count[NUM_ISA_MODE][OP_LAST + 1];
  * buffer (char msg[NUM_COUNT_SHOW*80]) in event_exit() overflowing the stack.
  * It won't work on Windows either if the output is too large.
  */
-#define NUM_COUNT_SHOW 15
+#define NUM_COUNT_SHOW 100
 
 static void
 event_exit(void);
@@ -91,6 +95,19 @@ event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *inst
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
+    int i, j;
+    for (j = 0; j < NUM_ISA_MODE; j++) {
+      for (i = 0; i <= OP_LAST; i++) {
+        op_reads[j][i] = 0;
+        op_writes[j][i] = 0;
+        count[j][i] = 0;
+      }
+    }
+    op_memory[0] = 0;
+    op_memory[1] = 0;
+    op_memory[2] = 0;
+    op_memory[3] = 0;
+
     dr_set_client_name("DynamoRIO Sample Client 'opcodes'",
                        "http://dynamorio.org/issues");
     if (!drmgr_init())
@@ -151,36 +168,33 @@ get_isa_mode_name(uint isa_mode)
 static void
 event_exit(void)
 {
+  printf("Showing results\n");
 #ifdef SHOW_RESULTS
-    char msg[NUM_COUNT_SHOW * 80];
-    int len, i;
-    size_t sofar = 0;
+    int i;
     /* First, sort the counts */
     uint indices[NUM_COUNT];
     for (cur_isa = 0; cur_isa < NUM_ISA_MODE; cur_isa++) {
-        sofar = 0;
-        for (i = 0; i <= OP_LAST; i++)
-            indices[i] = i;
+        for (i = 0; i <= OP_LAST; i++) indices[i] = i;
         qsort(indices, NUM_COUNT, sizeof(indices[0]), compare_counts);
 
-        if (count[cur_isa][indices[OP_LAST]] == 0)
-            continue;
-        len = dr_snprintf(msg, sizeof(msg) / sizeof(msg[0]),
-                          "Top %d opcode execution counts in %s mode:\n", NUM_COUNT_SHOW,
-                          get_isa_mode_name(cur_isa));
-        DR_ASSERT(len > 0);
-        sofar += len;
-        for (i = OP_LAST - 1 - NUM_COUNT_SHOW; i <= OP_LAST; i++) {
+        if (count[cur_isa][indices[OP_LAST]] == 0) continue;
+
+        printf("Top %d opcode execution counts in %s mode:\n",
+            NUM_COUNT_SHOW, get_isa_mode_name(cur_isa));
+        for (i = OP_LAST; i >= OP_LAST - 1 - NUM_COUNT_SHOW; i--) {
             if (count[cur_isa][indices[i]] != 0) {
-                len = dr_snprintf(msg + sofar, sizeof(msg) / sizeof(msg[0]) - sofar,
-                                  "  %9lu : %-15s\n", count[cur_isa][indices[i]],
-                                  decode_opcode_name(indices[i]));
-                DR_ASSERT(len > 0);
-                sofar += len;
+                printf("  %9lu : %-15s %lu %lu\n",
+                    count[cur_isa][indices[i]],
+                    decode_opcode_name(indices[i]),
+                    op_reads[cur_isa][indices[i]],
+                    op_writes[cur_isa][indices[i]]);
             }
         }
-        NULL_TERMINATE(msg);
-        DISPLAY_STRING(msg);
+        printf("Memory Instructions (disambiguation)\n"
+               "\tRegister  %ld\n"
+               "\tMem.Read  %ld\n"
+               "\tMem.Write %ld\n"
+               "\tMem.R/W   %ld\n",op_memory[3],op_memory[0],op_memory[1],op_memory[2]);
     }
 #endif /* SHOW_RESULTS */
     if (!drmgr_unregister_bb_insertion_event(event_app_instruction))
@@ -234,11 +248,56 @@ event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *inst
                                        * here won't be used: drreg's slots will be.
                                        */
                                       SPILL_SLOT_MAX + 1,
-                                      IF_AARCHXX_(SPILL_SLOT_MAX + 1) &
-                                          count[isa_idx][instr_get_opcode(ins)],
+                                      IF_AARCHXX_(SPILL_SLOT_MAX + 1)
+                                      &count[isa_idx][instr_get_opcode(ins)],
                                       1,
                                       /* DRX_COUNTER_LOCK is not yet supported on ARM */
-                                      IF_X86_ELSE(DRX_COUNTER_LOCK, 0));
+                                      DRX_COUNTER_64BIT); // DRX_COUNTER_64BIT | IF_X86_ELSE(DRX_COUNTER_LOCK, 0)
+            uint num_bytes_read = 0;
+            if (instr_reads_memory(ins)) {
+              int a;
+              opnd_t curop;
+              for (a = 0; a < instr_num_srcs(ins); a++) {
+                  curop = instr_get_src(ins, a);
+                  if (opnd_is_memory_reference(curop)) {
+                      num_bytes_read += opnd_size_in_bytes(opnd_get_size(curop));
+                  }
+              }
+              drx_insert_counter_update(
+                  drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
+                  &op_reads[isa_idx][instr_get_opcode(ins)],num_bytes_read,DRX_COUNTER_64BIT);
+            }
+            uint num_bytes_write = 0;
+            if (instr_writes_memory(ins)) {
+              int a;
+              opnd_t curop;
+              for (a = 0; a < instr_num_dsts(ins); a++) {
+                  curop = instr_get_dst(ins, a);
+                  if (opnd_is_memory_reference(curop)) {
+                    num_bytes_write += opnd_size_in_bytes(opnd_get_size(curop));
+                  }
+              }
+              drx_insert_counter_update(
+                  drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
+                  &op_writes[isa_idx][instr_get_opcode(ins)],num_bytes_write,DRX_COUNTER_64BIT);
+            }
+            if (num_bytes_read==0 && num_bytes_write==0) {
+              drx_insert_counter_update(
+                  drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
+                  &op_memory[3],1,DRX_COUNTER_64BIT);
+            } else if (num_bytes_read>0 && num_bytes_write>0) {
+              drx_insert_counter_update(
+                  drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
+                  &op_memory[2],1,DRX_COUNTER_64BIT);
+            } else if (num_bytes_read>0) {
+              drx_insert_counter_update(
+                  drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
+                  &op_memory[0],1,DRX_COUNTER_64BIT);
+            } else if (num_bytes_write>0) {
+              drx_insert_counter_update(
+                  drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
+                  &op_memory[1],1,DRX_COUNTER_64BIT);
+            }
         }
     }
     return DR_EMIT_DEFAULT;

@@ -40,6 +40,7 @@
 #include "dr_api.h"
 #include "drmgr.h"
 #include "drx.h"
+
 #include <stdlib.h> /* qsort */
 #include <string.h>
 
@@ -71,10 +72,53 @@ enum {
 #endif
     NUM_ISA_MODE,
 };
+
+typedef enum {
+    OP_TYPE_OTHER,
+
+    OP_TYPE_SIMD_LOAD,
+    OP_TYPE_SIMD_STORE,
+
+    OP_TYPE_SCALAR_LOAD,
+    OP_TYPE_SCALAR_STORE,
+
+    OP_TYPE_SIMD_FLOAT,
+    OP_TYPE_SCALAR_FLOAT,
+
+    OP_TYPE_SIMD_INTEGER,
+    OP_TYPE_SCALAR_INTEGER,
+
+    OP_TYPE_BRANCH,
+    OP_TYPE_STACK,
+
+    NUM_OP_TYPES
+} op_type_t;
+
+static const char *op_type_names[NUM_OP_TYPES] = {
+    "OTHER",
+
+    "SIMD_LOAD",
+    "SIMD_STORE",
+
+    "SCALAR_LOAD",
+    "SCALAR_STORE",
+
+    "SIMD_FLOAT",
+    "SCALAR_FLOAT",
+
+    "SIMD_INTEGER",
+    "SCALAR_INTEGER",
+
+    "BRANCH",
+    "STACK"
+};
+
+static uint64 op_type_count[NUM_OP_TYPES];
 static uint64 op_reads[NUM_ISA_MODE][OP_LAST + 1];
 static uint64 op_writes[NUM_ISA_MODE][OP_LAST + 1];
 static uint64 op_memory[4]; // 0-LD / 1-ST / 2-LD&ST / 3-None
 static uint64 count[NUM_ISA_MODE][OP_LAST + 1];
+
 #define NUM_COUNT sizeof(count[0]) / sizeof(count[0][0])
 /* We only display the top 15 counts.  This sample could be extended to
  * write all the counts to a file.
@@ -92,6 +136,59 @@ static dr_emit_flags_t
 event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *instr,
                       bool for_trace, bool translating, void *user_data);
 
+static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *instr,
+                                 bool reads_mem, bool writes_mem) {
+    // To avoid calling drx_insert all the time.
+    #define add_one(op_type) (drx_insert_counter_update( \
+        drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1) \
+        &op_type_count[(op_type)],1,DRX_COUNTER_64BIT))
+
+    int op_code = instr_get_opcode(instr);
+
+    if (reads_mem) {
+        if (op_is_simd_load(op_code)) {
+            add_one(OP_TYPE_SIMD_LOAD);
+        }
+        else { // scalar
+            add_one(OP_TYPE_SCALAR_LOAD);
+        }
+    }
+    // x86 can read and write memory in the same instruction.
+    if (writes_mem) {
+        if (op_is_simd_store(op_code)) {
+            add_one(OP_TYPE_SIMD_STORE);
+        }
+        else { // scalar
+            add_one(OP_TYPE_SCALAR_STORE);
+        }
+    }
+
+    // x86 can read/write memory and compute in the same instruction.
+    if (op_is_simd_integer(op_code)) {
+        add_one(OP_TYPE_SIMD_INTEGER);
+    }
+    else if (op_is_scalar_integer(op_code)) {
+        add_one(OP_TYPE_SCALAR_INTEGER);
+    }
+    else if (op_is_simd_float(op_code)) {
+        add_one(OP_TYPE_SIMD_FLOAT);
+    }
+    else if (op_is_scalar_float(op_code)) {
+        add_one(OP_TYPE_SCALAR_FLOAT);
+    }
+    else if (op_is_branch(op_code)) {
+        add_one(OP_TYPE_BRANCH);
+    }
+    else if (op_is_stack(op_code)) {
+        add_one(OP_TYPE_STACK);
+    }
+    else {
+        add_one(OP_TYPE_OTHER);
+    }
+
+    #undef add_one
+}
+
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
@@ -107,6 +204,10 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     op_memory[1] = 0;
     op_memory[2] = 0;
     op_memory[3] = 0;
+
+    for (i = 0; i < NUM_OP_TYPES; ++i) {
+        op_type_count[i] = 0;
+    }
 
     dr_set_client_name("DynamoRIO Sample Client 'opcodes'",
                        "http://dynamorio.org/issues");
@@ -190,6 +291,12 @@ event_exit(void)
                     op_writes[cur_isa][indices[i]]);
             }
         }
+
+        printf("Instruction mix:\n");
+        for (i = 0; i < NUM_OP_TYPES; ++i) {
+            printf("\t%s: %ld\n", op_type_names[i], op_type_count[i]);
+        }
+
         printf("Memory Instructions (disambiguation)\n"
                "\tRegister  %ld\n"
                "\tMem.Read  %ld\n"
@@ -281,6 +388,9 @@ event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *inst
                   drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
                   &op_writes[isa_idx][instr_get_opcode(ins)],num_bytes_write,DRX_COUNTER_64BIT);
             }
+
+            update_op_type_count(drcontext, bb, instr, num_bytes_read > 0, num_bytes_write > 0);
+
             if (num_bytes_read==0 && num_bytes_write==0) {
               drx_insert_counter_update(
                   drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)

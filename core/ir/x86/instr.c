@@ -2309,3 +2309,58 @@ instr_is_gather(instr_t *instr)
     default: return false;
     }
 }
+
+bool op_is_simd_load(int op_code) {
+    return false;
+}
+bool op_is_simd_store(int op_code) {
+    return false;
+}
+
+bool op_is_scalar_load(int op_code) {
+    return false;
+}
+bool op_is_scalar_store(int op_code) {
+    return false;
+}
+
+bool op_is_simd_integer(int op_code) {
+    return false;
+}
+bool op_is_scalar_integer(int op_code) {
+    switch (op_code) {
+        case /*   4 */ OP_add:      /**< IA-32/AMD64 add opcode. */
+        case /*   5 */ OP_or:       /**< IA-32/AMD64 or opcode. */
+        case /*   6 */ OP_adc:      /**< IA-32/AMD64 adc opcode. */
+        case /*   7 */ OP_sbb:      /**< IA-32/AMD64 sbb opcode. */
+        case /*   8 */ OP_and:      /**< IA-32/AMD64 and opcode. */
+        case /*  10 */ OP_sub:      /**< IA-32/AMD64 sub opcode. */
+        case /*  12 */ OP_xor:      /**< IA-32/AMD64 xor opcode. */
+        case /*  14 */ OP_cmp:      /**< IA-32/AMD64 cmp opcode. */
+        case /*  16 */ OP_inc:      /**< IA-32/AMD64 inc opcode. */
+        case /*  17 */ OP_dec:      /**< IA-32/AMD64 dec opcode. */
+        case /*  25 */ OP_imul:     /**< IA-32/AMD64 imul opcode. */ return true;
+        default: return false;
+    }
+}
+
+bool op_is_simd_float(int op_code) {
+    return false;
+}
+bool op_is_scalar_float(int op_code) {
+    return false;
+}
+
+bool op_is_branch(int op_code) {
+    return false;
+}
+bool op_is_stack(int op_code) {
+    switch (op_code) {
+        case /*  18 */ OP_push:     /**< IA-32/AMD64 push opcode. */
+        case /*  19 */ OP_push_imm: /**< IA-32/AMD64 push_imm opcode. */
+        case /*  20 */ OP_pop:      /**< IA-32/AMD64 pop opcode. */
+        case /*  21 */ OP_pusha:    /**< IA-32/AMD64 pusha opcode. */
+        case /*  22 */ OP_popa:     /**< IA-32/AMD64 popa opcode. */ return true;
+        default: return false;
+    }
+}

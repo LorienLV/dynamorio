@@ -916,3 +916,42 @@ instr_is_gather(instr_t *instr)
     /* XXX i#3837: no gather-load on ARM? */
     return false;
 }
+
+bool op_is_other(int op_code) {
+    return false;
+}
+
+bool op_is_simd_load(int op_code) {
+    return false;
+}
+bool op_is_simd_store(int op_code) {
+    return false;
+}
+
+bool op_is_scalar_load(int op_code) {
+    return false;
+}
+bool op_is_scalar_store(int op_code) {
+    return false;
+}
+
+bool op_is_simd_float(int op_code) {
+    return false;
+}
+bool op_is_scalar_float(int op_code) {
+    return false;
+}
+
+bool op_is_simd_integer(int op_code) {
+    return false;
+}
+bool op_is_scalar_integer(int op_code) {
+    return false;
+}
+
+bool op_is_branch(int op_code) {
+    return false;
+}
+bool op_is_stack(int op_code) {
+    return false;
+}

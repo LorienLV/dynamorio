@@ -1148,6 +1148,32 @@ bool
 instr_is_gather(instr_t *instr);
 
 DR_API
+bool op_is_simd_load(int op_code);
+DR_API
+bool op_is_simd_store(int op_code);
+
+DR_API
+bool op_is_scalar_load(int op_code);
+DR_API
+bool op_is_scalar_store(int op_code);
+
+DR_API
+bool op_is_simd_integer(int op_code);
+DR_API
+bool op_is_scalar_integer(int op_code);
+
+DR_API
+bool op_is_simd_float(int op_code);
+DR_API
+bool op_is_scalar_float(int op_code);
+
+DR_API
+bool op_is_branch(int op_code);
+DR_API
+bool op_is_stack(int op_code);
+
+
+DR_API
 /**
  * Returns true iff \p pred denotes a truly conditional predicate: on all
  * architectures, this excludes #DR_PRED_NONE. On ARM it also excludes

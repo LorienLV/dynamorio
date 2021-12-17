@@ -119,6 +119,8 @@ static const char *op_type_names[NUM_OP_TYPES] = {
     "STACK",
 };
 
+static uint64 total_bytes_read;
+static uint64 total_bytes_write;
 static uint64 op_type_count[NUM_OP_TYPES];
 static uint64 op_reads[NUM_ISA_MODE][OP_LAST + 1];
 static uint64 op_writes[NUM_ISA_MODE][OP_LAST + 1];
@@ -143,25 +145,11 @@ event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *inst
                       bool for_trace, bool translating, void *user_data);
                       
 static bool op_is_simd(int op_code) {
-    if (op_is_simd_mov(op_code) ||
-        op_is_simd_integer(op_code) ||
-        op_is_simd_float(op_code) ) {
-        return true;
-    }
-    else {
-        return false;
-    }
+    return op_is_simd_mov(op_code) || op_is_simd_integer(op_code) || op_is_simd_float(op_code);
 }
 
 static bool op_is_scalar(int op_code) {
-    if (op_is_scalar_mov(op_code) ||
-        op_is_scalar_integer(op_code) ||
-        op_is_scalar_float(op_code) ) {
-        return true;
-    }
-    else {
-        return false;
-    }
+    return op_is_scalar_mov(op_code) || op_is_scalar_integer(op_code) || op_is_scalar_float(op_code);
 }
 
 static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *instr,
@@ -256,6 +244,9 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     op_memory[2] = 0;
     op_memory[3] = 0;
 
+    total_bytes_read = 0;
+    total_bytes_write = 0;
+
     for (i = 0; i < NUM_OP_TYPES; ++i) {
         op_type_count[i] = 0;
     }
@@ -342,11 +333,17 @@ event_exit(void)
                     op_writes[cur_isa][indices[i]]);
             }
         }
+        printf("\n");
 
         printf("Instruction mix:\n");
         for (i = 0; i < NUM_OP_TYPES; ++i) {
             printf("\t%s: %ld\n", op_type_names[i], op_type_count[i]);
         }
+
+        printf("\n");
+        printf("Total bytes read: %ld\n", total_bytes_read);
+        printf("Total bytes written: %ld\n", total_bytes_write);
+        printf("\n");
 
         printf("Memory Instructions (disambiguation)\n"
                "\tRegister  %ld\n"
@@ -435,12 +432,21 @@ event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *inst
                     num_bytes_write += opnd_size_in_bytes(opnd_get_size(curop));
                   }
               }
-              drx_insert_counter_update(
-                  drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
-                  &op_writes[isa_idx][instr_get_opcode(ins)],num_bytes_write,DRX_COUNTER_64BIT);
             }
 
+            drx_insert_counter_update(
+                drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
+                &total_bytes_read,num_bytes_read,DRX_COUNTER_64BIT);
+
+            drx_insert_counter_update(
+                drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
+                &total_bytes_write,num_bytes_write,DRX_COUNTER_64BIT);
+
             update_op_type_count(drcontext, bb, instr, num_bytes_read > 0, num_bytes_write > 0);
+
+            drx_insert_counter_update(
+                drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
+                &op_memory[3],1,DRX_COUNTER_64BIT);
 
             if (num_bytes_read==0 && num_bytes_write==0) {
               drx_insert_counter_update(

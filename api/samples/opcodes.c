@@ -77,10 +77,13 @@ typedef enum {
     OP_TYPE_OTHER,
 
     OP_TYPE_SIMD_LOAD,
-    OP_TYPE_SIMD_STORE,
-
     OP_TYPE_SCALAR_LOAD,
+
+    OP_TYPE_SIMD_STORE,
     OP_TYPE_SCALAR_STORE,
+
+    OP_TYPE_SIMD_REGISTER,
+    OP_TYPE_SCALAR_REGISTER,
 
     OP_TYPE_SIMD_FLOAT,
     OP_TYPE_SCALAR_FLOAT,
@@ -98,10 +101,13 @@ static const char *op_type_names[NUM_OP_TYPES] = {
     "OTHER",
 
     "SIMD_LOAD",
-    "SIMD_STORE",
-
     "SCALAR_LOAD",
+
+    "SIMD_STORE",
     "SCALAR_STORE",
+
+    "SIMD_REGISTER",
+    "SCALAR_REGISTER",
 
     "SIMD_FLOAT",
     "SCALAR_FLOAT",
@@ -110,7 +116,7 @@ static const char *op_type_names[NUM_OP_TYPES] = {
     "SCALAR_INTEGER",
 
     "BRANCH",
-    "STACK"
+    "STACK",
 };
 
 static uint64 op_type_count[NUM_OP_TYPES];
@@ -135,54 +141,99 @@ event_exit(void);
 static dr_emit_flags_t
 event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *instr,
                       bool for_trace, bool translating, void *user_data);
+                      
+static bool op_is_simd(int op_code) {
+    if (op_is_simd_mov(op_code) ||
+        op_is_simd_integer(op_code) ||
+        op_is_simd_float(op_code) ) {
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+static bool op_is_scalar(int op_code) {
+    if (op_is_scalar_mov(op_code) ||
+        op_is_scalar_integer(op_code) ||
+        op_is_scalar_float(op_code) ) {
+        return true;
+    }
+    else {
+        return false;
+    }
+}
 
 static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *instr,
                                  bool reads_mem, bool writes_mem) {
+    bool added = false;
+
     // To avoid calling drx_insert all the time.
-    #define add_one(op_type) (drx_insert_counter_update( \
+    #define add_one(op_type) drx_insert_counter_update( \
         drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1) \
-        &op_type_count[(op_type)],1,DRX_COUNTER_64BIT))
+        &op_type_count[(op_type)],1,DRX_COUNTER_64BIT); added = true;
 
     int op_code = instr_get_opcode(instr);
 
+    // x86 can read and write memory in the same instruction.
     if (reads_mem) {
-        if (op_is_simd_load(op_code)) {
+        if (op_is_stack(op_code)) {
+            add_one(OP_TYPE_STACK);
+        }
+        // simd load or simd instruction that reads memory.
+        else if (op_is_simd(op_code)) {
             add_one(OP_TYPE_SIMD_LOAD);
         }
-        else { // scalar
+        // scalar load or scalar instruction that reads memory.
+        else if (op_is_scalar(op_code)) {
             add_one(OP_TYPE_SCALAR_LOAD);
         }
     }
-    // x86 can read and write memory in the same instruction.
     if (writes_mem) {
-        if (op_is_simd_store(op_code)) {
+        if (op_is_stack(op_code)) {
+            add_one(OP_TYPE_STACK);
+        }
+        // simd store or simd instruction that writes memory.
+        else if (op_is_simd(op_code)) {
             add_one(OP_TYPE_SIMD_STORE);
         }
-        else { // scalar
+        // scalar store or scalar instruction that writes memory.
+        else if (op_is_scalar(op_code)) {
             add_one(OP_TYPE_SCALAR_STORE);
+        }
+    }
+    if (!reads_mem && !writes_mem) {
+        // simd register instruction
+        if (op_is_simd_mov(op_code)) {
+            add_one(OP_TYPE_SIMD_REGISTER);
+        }
+        // scalar register instruction
+        else if (op_is_scalar_mov(op_code)) {
+            add_one(OP_TYPE_SCALAR_REGISTER);
         }
     }
 
     // x86 can read/write memory and compute in the same instruction.
+    // x86 can increment a variable and branch on the same instruction.
     if (op_is_simd_integer(op_code)) {
         add_one(OP_TYPE_SIMD_INTEGER);
     }
     else if (op_is_scalar_integer(op_code)) {
         add_one(OP_TYPE_SCALAR_INTEGER);
     }
-    else if (op_is_simd_float(op_code)) {
+
+    if (op_is_simd_float(op_code)) {
         add_one(OP_TYPE_SIMD_FLOAT);
     }
     else if (op_is_scalar_float(op_code)) {
         add_one(OP_TYPE_SCALAR_FLOAT);
     }
-    else if (op_is_branch(op_code)) {
+
+    if (op_is_branch(op_code)) {
         add_one(OP_TYPE_BRANCH);
     }
-    else if (op_is_stack(op_code)) {
-        add_one(OP_TYPE_STACK);
-    }
-    else {
+
+    if (!added) {
         add_one(OP_TYPE_OTHER);
     }
 

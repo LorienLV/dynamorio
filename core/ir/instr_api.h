@@ -1148,30 +1148,52 @@ bool
 instr_is_gather(instr_t *instr);
 
 DR_API
-bool op_is_simd_load(int op_code);
-DR_API
-bool op_is_simd_store(int op_code);
+/**
+ * Returns true iff \p op_code is a simd-mov op.
+ */
+bool op_is_simd_mov(int op_code);
 
 DR_API
-bool op_is_scalar_load(int op_code);
-DR_API
-bool op_is_scalar_store(int op_code);
+/**
+ * Returns true iff \p op_code is a scalar-mov op.
+ */
+bool op_is_scalar_mov(int op_code);
 
 DR_API
+/**
+ * Returns true iff \p op_code is a simd-integer op.
+ */
 bool op_is_simd_integer(int op_code);
+
 DR_API
+/**
+ * Returns true iff \p op_code is a scalar-integer op.
+ */
 bool op_is_scalar_integer(int op_code);
 
 DR_API
+/**
+ * Returns true iff \p op_code is a simd-float op.
+ */
 bool op_is_simd_float(int op_code);
+
 DR_API
+/**
+ * Returns true iff \p op_code is a scalar-float op.
+ */
 bool op_is_scalar_float(int op_code);
 
 DR_API
+/**
+ * Returns true iff \p op_code is a branch op.
+ */
 bool op_is_branch(int op_code);
-DR_API
-bool op_is_stack(int op_code);
 
+DR_API
+/**
+ * Returns true iff \p op_code is an stack op.
+ */
+bool op_is_stack(int op_code);
 
 DR_API
 /**

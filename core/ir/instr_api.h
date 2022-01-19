@@ -1149,39 +1149,21 @@ instr_is_gather(instr_t *instr);
 
 DR_API
 /**
- * Returns true iff \p op_code is a simd-mov op.
+ * Returns true iff \p op_code is a mov op.
  */
-bool op_is_simd_mov(int op_code);
+bool op_is_mov(int op_code);
 
 DR_API
 /**
- * Returns true iff \p op_code is a scalar-mov op.
+ * Returns true iff \p op_code is an integer op.
  */
-bool op_is_scalar_mov(int op_code);
+bool op_is_integer(int op_code);
 
 DR_API
 /**
- * Returns true iff \p op_code is a simd-integer op.
+ * Returns true iff \p op_code is a float op.
  */
-bool op_is_simd_integer(int op_code);
-
-DR_API
-/**
- * Returns true iff \p op_code is a scalar-integer op.
- */
-bool op_is_scalar_integer(int op_code);
-
-DR_API
-/**
- * Returns true iff \p op_code is a simd-float op.
- */
-bool op_is_simd_float(int op_code);
-
-DR_API
-/**
- * Returns true iff \p op_code is a scalar-float op.
- */
-bool op_is_scalar_float(int op_code);
+bool op_is_float(int op_code);
 
 DR_API
 /**

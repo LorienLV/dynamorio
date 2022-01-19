@@ -2311,8 +2311,125 @@ instr_is_gather(instr_t *instr)
 }
 
 // TODO: CONVERT (cvt)
-bool op_is_simd_mov(int op_code) {
+DR_API
+bool
+op_is_mov(int op_code) {
     switch (op_code) {
+        /*
+         * SCALAR
+         */
+        /* point ld & st at eAX & al instrs, they save 1 byte (no modrm),
+            * hopefully time taken considering them doesn't offset that */
+        case /*  55 */ OP_mov_ld: /**< IA-32/AMD64 mov_ld opcode. */
+        case /*  56 */ OP_mov_st: /**< IA-32/AMD64 mov_st opcode. */
+        /* PR 250397: store of immed is mov_st not mov_imm even though can be immed->reg
+        * which we address by sharing part of the mov_st template chain */
+        case /*  57 */ OP_mov_imm:  /**< IA-32/AMD64 mov_imm opcode. */
+        case /*  58 */ OP_mov_seg:  /**< IA-32/AMD64 mov_seg opcode. */
+        case /*  59 */ OP_mov_priv: /**< IA-32/AMD64 mov_priv opcode. */
+
+        case /*  62 */ OP_xchg:  /**< IA-32/AMD64 xchg opcode. */
+
+        case /* 110 */ OP_cmovo:   /**< IA-32/AMD64 cmovo opcode. */
+        case /* 111 */ OP_cmovno:  /**< IA-32/AMD64 cmovno opcode. */
+        case /* 112 */ OP_cmovb:   /**< IA-32/AMD64 cmovb opcode. */
+        case /* 113 */ OP_cmovnb:  /**< IA-32/AMD64 cmovnb opcode. */
+        case /* 114 */ OP_cmovz:   /**< IA-32/AMD64 cmovz opcode. */
+        case /* 115 */ OP_cmovnz:  /**< IA-32/AMD64 cmovnz opcode. */
+        case /* 116 */ OP_cmovbe:  /**< IA-32/AMD64 cmovbe opcode. */
+        case /* 117 */ OP_cmovnbe: /**< IA-32/AMD64 cmovnbe opcode. */
+        case /* 118 */ OP_cmovs:   /**< IA-32/AMD64 cmovs opcode. */
+        case /* 119 */ OP_cmovns:  /**< IA-32/AMD64 cmovns opcode. */
+        case /* 120 */ OP_cmovp:   /**< IA-32/AMD64 cmovp opcode. */
+        case /* 121 */ OP_cmovnp:  /**< IA-32/AMD64 cmovnp opcode. */
+        case /* 122 */ OP_cmovl:   /**< IA-32/AMD64 cmovl opcode. */
+        case /* 123 */ OP_cmovnl:  /**< IA-32/AMD64 cmovnl opcode. */
+        case /* 124 */ OP_cmovle:  /**< IA-32/AMD64 cmovle opcode. */
+        case /* 125 */ OP_cmovnle: /**< IA-32/AMD64 cmovnle opcode. */
+
+        case /* 168 */ OP_seto:   /**< IA-32/AMD64 seto opcode. */
+        case /* 169 */ OP_setno:  /**< IA-32/AMD64 setno opcode. */
+        case /* 170 */ OP_setb:   /**< IA-32/AMD64 setb opcode. */
+        case /* 171 */ OP_setnb:  /**< IA-32/AMD64 setnb opcode. */
+        case /* 172 */ OP_setz:   /**< IA-32/AMD64 setz opcode. */
+        case /* 173 */ OP_setnz:  /**< IA-32/AMD64 setnz opcode. */
+        case /* 174 */ OP_setbe:  /**< IA-32/AMD64 setbe opcode. */
+        case /* 175 */ OP_setnbe: /**< IA-32/AMD64 setnbe opcode. */
+        case /* 176 */ OP_sets:   /**< IA-32/AMD64 sets opcode. */
+        case /* 177 */ OP_setns:  /**< IA-32/AMD64 setns opcode. */
+        case /* 178 */ OP_setp:   /**< IA-32/AMD64 setp opcode. */
+        case /* 179 */ OP_setnp:  /**< IA-32/AMD64 setnp opcode. */
+        case /* 180 */ OP_setl:   /**< IA-32/AMD64 setl opcode. */
+        case /* 181 */ OP_setnl:  /**< IA-32/AMD64 setnl opcode. */
+        case /* 182 */ OP_setle:  /**< IA-32/AMD64 setle opcode. */
+        case /* 183 */ OP_setnle: /**< IA-32/AMD64 setnle opcode. */
+
+        case /* 190 */ OP_cmpxchg:    /**< IA-32/AMD64 cmpxchg opcode. */
+
+        case /* 193 */ OP_lfs:        /**< IA-32/AMD64 lfs opcode. */
+        case /* 194 */ OP_lgs:        /**< IA-32/AMD64 lgs opcode. */
+
+        case /* 195 */ OP_movzx:      /**< IA-32/AMD64 movzx opcode. */
+        case /* 200 */ OP_movsx:      /**< IA-32/AMD64 movsx opcode. */
+        case /* 202 */ OP_movnti:     /**< IA-32/AMD64 movnti opcode. */
+        case /* 203 */ OP_pinsrw:     /**< IA-32/AMD64 pinsrw opcode. */
+        case /* 204 */ OP_pextrw:     /**< IA-32/AMD64 pextrw opcode. */
+
+        case /* 387 */ OP_movs:       /**< IA-32/AMD64 movs opcode. */
+        case /* 388 */ OP_rep_movs:   /**< IA-32/AMD64 rep_movs opcode. */
+        case /* 389 */ OP_stos:       /**< IA-32/AMD64 stos opcode. */
+        case /* 390 */ OP_rep_stos:   /**< IA-32/AMD64 rep_stos opcode. */
+        case /* 391 */ OP_lods:       /**< IA-32/AMD64 lods opcode. */
+        case /* 392 */ OP_rep_lods:   /**< IA-32/AMD64 rep_lods opcode. */
+
+        case /* 407 */ OP_fld:     /**< IA-32/AMD64 fld opcode. */
+        case /* 408 */ OP_fst:     /**< IA-32/AMD64 fst opcode. */
+        case /* 409 */ OP_fstp:    /**< IA-32/AMD64 fstp opcode. */
+        case /* 422 */ OP_fild:    /**< IA-32/AMD64 fild opcode. */
+        case /* 423 */ OP_fist:    /**< IA-32/AMD64 fist opcode. */
+        case /* 424 */ OP_fistp:   /**< IA-32/AMD64 fistp opcode. */
+
+        case /* 430 */ OP_fxch:     /**< IA-32/AMD64 fxch opcode. */
+        case /* 447 */ OP_fxtract:  /**< IA-32/AMD64 fxtract opcode. */
+        case /* 459 */ OP_fcmovb:   /**< IA-32/AMD64 fcmovb opcode. */
+        case /* 460 */ OP_fcmove:   /**< IA-32/AMD64 fcmove opcode. */
+        case /* 461 */ OP_fcmovbe:  /**< IA-32/AMD64 fcmovbe opcode. */
+        case /* 462 */ OP_fcmovu:   /**< IA-32/AMD64 fcmovu opcode. */
+        case /* 463 */ OP_fucompp:  /**< IA-32/AMD64 fucompp opcode. */
+        case /* 464 */ OP_fcmovnb:  /**< IA-32/AMD64 fcmovnb opcode. */
+        case /* 465 */ OP_fcmovne:  /**< IA-32/AMD64 fcmovne opcode. */
+        case /* 466 */ OP_fcmovnbe: /**< IA-32/AMD64 fcmovnbe opcode. */
+        case /* 467 */ OP_fcmovnu:  /**< IA-32/AMD64 fcmovnu opcode. */
+
+        /* x64 */
+        case /* 597 */ OP_movsxd: /**< IA-32/AMD64 movsxd opcode. */
+
+        /* AMD TBM */
+        case /* 1041 */ OP_bextr:   /**< IA-32/AMD64 bextr opcode. */
+        case /* 1042 */ OP_blcfill: /**< IA-32/AMD64 blcfill opcode. */
+        case /* 1043 */ OP_blci:    /**< IA-32/AMD64 blci opcode. */
+        case /* 1044 */ OP_blcic:   /**< IA-32/AMD64 blcic opcode. */
+        case /* 1045 */ OP_blcmsk:  /**< IA-32/AMD64 blcmsk opcode. */
+        case /* 1046 */ OP_blcs:    /**< IA-32/AMD64 blcs opcode. */
+        case /* 1047 */ OP_blsfill: /**< IA-32/AMD64 blsfill opcode. */
+        case /* 1048 */ OP_blsic:   /**< IA-32/AMD64 blsic opcode. */
+        case /* 1049 */ OP_t1mskc:  /**< IA-32/AMD64 t1mskc opcode. */
+        case /* 1050 */ OP_tzmsk:   /**< IA-32/AMD64 tzmsk opcode. */
+
+        /* Intel BMI1 */
+        /* (includes non-immed form of OP_bextr) */
+        case /* 1056 */ OP_blsr:   /**< IA-32/AMD64 blsr opcode. */
+        case /* 1057 */ OP_blsmsk: /**< IA-32/AMD64 blsmsk opcode. */
+        case /* 1058 */ OP_blsi:   /**< IA-32/AMD64 blsi opcode. */
+
+        /* Intel BMI2 */
+        case /* 1060 */ OP_bzhi: /**< IA-32/AMD64 bzhi opcode. */
+        case /* 1061 */ OP_pext: /**< IA-32/AMD64 pext opcode. */
+        case /* 1062 */ OP_pdep: /**< IA-32/AMD64 pdep opcode. */
+
+        /*
+         * SIMD
+         */
         case /* 102 */ OP_movntps:   /**< IA-32/AMD64 movntps opcode. */
         case /* 103 */ OP_movntpd:   /**< IA-32/AMD64 movntpd opcode. */
 
@@ -2682,123 +2799,75 @@ bool op_is_simd_mov(int op_code) {
     }
 }
 
-bool op_is_scalar_mov(int op_code) {
+DR_API
+bool
+op_is_integer(int op_code) {
     switch (op_code) {
-        /* point ld & st at eAX & al instrs, they save 1 byte (no modrm),
-            * hopefully time taken considering them doesn't offset that */
-        case /*  55 */ OP_mov_ld: /**< IA-32/AMD64 mov_ld opcode. */
-        case /*  56 */ OP_mov_st: /**< IA-32/AMD64 mov_st opcode. */
-        /* PR 250397: store of immed is mov_st not mov_imm even though can be immed->reg
-        * which we address by sharing part of the mov_st template chain */
-        case /*  57 */ OP_mov_imm:  /**< IA-32/AMD64 mov_imm opcode. */
-        case /*  58 */ OP_mov_seg:  /**< IA-32/AMD64 mov_seg opcode. */
-        case /*  59 */ OP_mov_priv: /**< IA-32/AMD64 mov_priv opcode. */
+        /*
+         * SCALAR
+         */
+        case /*   4 */ OP_add:      /**< IA-32/AMD64 add opcode. */
+        case /*   5 */ OP_or:       /**< IA-32/AMD64 or opcode. */
+        case /*   6 */ OP_adc:      /**< IA-32/AMD64 adc opcode. */
+        case /*   7 */ OP_sbb:      /**< IA-32/AMD64 sbb opcode. */
+        case /*   8 */ OP_and:      /**< IA-32/AMD64 and opcode. */
+        case /*  10 */ OP_sub:      /**< IA-32/AMD64 sub opcode. */
+        case /*  12 */ OP_xor:      /**< IA-32/AMD64 xor opcode. */
+        case /*  14 */ OP_cmp:      /**< IA-32/AMD64 cmp opcode. */
+        case /*  16 */ OP_inc:      /**< IA-32/AMD64 inc opcode. */
+        case /*  17 */ OP_dec:      /**< IA-32/AMD64 dec opcode. */
+        case /*  25 */ OP_imul:     /**< IA-32/AMD64 imul opcode. */
 
-        case /*  62 */ OP_xchg:  /**< IA-32/AMD64 xchg opcode. */
+        case /*  60 */ OP_test:  /**< IA-32/AMD64 test opcode. */
+        case /*  61 */ OP_lea:   /**< IA-32/AMD64 lea opcode. */
 
-        case /* 110 */ OP_cmovo:   /**< IA-32/AMD64 cmovo opcode. */
-        case /* 111 */ OP_cmovno:  /**< IA-32/AMD64 cmovno opcode. */
-        case /* 112 */ OP_cmovb:   /**< IA-32/AMD64 cmovb opcode. */
-        case /* 113 */ OP_cmovnb:  /**< IA-32/AMD64 cmovnb opcode. */
-        case /* 114 */ OP_cmovz:   /**< IA-32/AMD64 cmovz opcode. */
-        case /* 115 */ OP_cmovnz:  /**< IA-32/AMD64 cmovnz opcode. */
-        case /* 116 */ OP_cmovbe:  /**< IA-32/AMD64 cmovbe opcode. */
-        case /* 117 */ OP_cmovnbe: /**< IA-32/AMD64 cmovnbe opcode. */
-        case /* 118 */ OP_cmovs:   /**< IA-32/AMD64 cmovs opcode. */
-        case /* 119 */ OP_cmovns:  /**< IA-32/AMD64 cmovns opcode. */
-        case /* 120 */ OP_cmovp:   /**< IA-32/AMD64 cmovp opcode. */
-        case /* 121 */ OP_cmovnp:  /**< IA-32/AMD64 cmovnp opcode. */
-        case /* 122 */ OP_cmovl:   /**< IA-32/AMD64 cmovl opcode. */
-        case /* 123 */ OP_cmovnl:  /**< IA-32/AMD64 cmovnl opcode. */
-        case /* 124 */ OP_cmovle:  /**< IA-32/AMD64 cmovle opcode. */
-        case /* 125 */ OP_cmovnle: /**< IA-32/AMD64 cmovnle opcode. */
+        case /*  63 */ OP_cwde:  /**< IA-32/AMD64 cwde opcode. */
+        case /*  64 */ OP_cdq:   /**< IA-32/AMD64 cdq opcode. */
 
-        case /* 168 */ OP_seto:   /**< IA-32/AMD64 seto opcode. */
-        case /* 169 */ OP_setno:  /**< IA-32/AMD64 setno opcode. */
-        case /* 170 */ OP_setb:   /**< IA-32/AMD64 setb opcode. */
-        case /* 171 */ OP_setnb:  /**< IA-32/AMD64 setnb opcode. */
-        case /* 172 */ OP_setz:   /**< IA-32/AMD64 setz opcode. */
-        case /* 173 */ OP_setnz:  /**< IA-32/AMD64 setnz opcode. */
-        case /* 174 */ OP_setbe:  /**< IA-32/AMD64 setbe opcode. */
-        case /* 175 */ OP_setnbe: /**< IA-32/AMD64 setnbe opcode. */
-        case /* 176 */ OP_sets:   /**< IA-32/AMD64 sets opcode. */
-        case /* 177 */ OP_setns:  /**< IA-32/AMD64 setns opcode. */
-        case /* 178 */ OP_setp:   /**< IA-32/AMD64 setp opcode. */
-        case /* 179 */ OP_setnp:  /**< IA-32/AMD64 setnp opcode. */
-        case /* 180 */ OP_setl:   /**< IA-32/AMD64 setl opcode. */
-        case /* 181 */ OP_setnl:  /**< IA-32/AMD64 setnl opcode. */
-        case /* 182 */ OP_setle:  /**< IA-32/AMD64 setle opcode. */
-        case /* 183 */ OP_setnle: /**< IA-32/AMD64 setnle opcode. */
+        case /* 185 */ OP_bt:         /**< IA-32/AMD64 bt opcode. */
+        case /* 186 */ OP_shld:       /**< IA-32/AMD64 shld opcode. */
+        case /* 188 */ OP_bts:        /**< IA-32/AMD64 bts opcode. */
+        case /* 189 */ OP_shrd:       /**< IA-32/AMD64 shrd opcode. */
+        case /* 192 */ OP_btr:        /**< IA-32/AMD64 btr opcode. */
 
-        case /* 190 */ OP_cmpxchg:    /**< IA-32/AMD64 cmpxchg opcode. */
+        case /* 197 */ OP_btc:        /**< IA-32/AMD64 btc opcode. */
+        case /* 198 */ OP_bsf:        /**< IA-32/AMD64 bsf opcode. */
+        case /* 199 */ OP_bsr:        /**< IA-32/AMD64 bsr opcode. */
+        case /* 201 */ OP_xadd:       /**< IA-32/AMD64 xadd opcode. */
+        case /* 205 */ OP_bswap:      /**< IA-32/AMD64 bswap opcode. */
 
-        case /* 193 */ OP_lfs:        /**< IA-32/AMD64 lfs opcode. */
-        case /* 194 */ OP_lgs:        /**< IA-32/AMD64 lgs opcode. */
-
-        case /* 195 */ OP_movzx:      /**< IA-32/AMD64 movzx opcode. */
-        case /* 200 */ OP_movsx:      /**< IA-32/AMD64 movsx opcode. */
-        case /* 202 */ OP_movnti:     /**< IA-32/AMD64 movnti opcode. */
-        case /* 203 */ OP_pinsrw:     /**< IA-32/AMD64 pinsrw opcode. */
-        case /* 204 */ OP_pextrw:     /**< IA-32/AMD64 pextrw opcode. */
-
-        case /* 387 */ OP_movs:       /**< IA-32/AMD64 movs opcode. */
-        case /* 388 */ OP_rep_movs:   /**< IA-32/AMD64 rep_movs opcode. */
-        case /* 389 */ OP_stos:       /**< IA-32/AMD64 stos opcode. */
-        case /* 390 */ OP_rep_stos:   /**< IA-32/AMD64 rep_stos opcode. */
-        case /* 391 */ OP_lods:       /**< IA-32/AMD64 lods opcode. */
-        case /* 392 */ OP_rep_lods:   /**< IA-32/AMD64 rep_lods opcode. */
-
-        case /* 407 */ OP_fld:     /**< IA-32/AMD64 fld opcode. */
-        case /* 408 */ OP_fst:     /**< IA-32/AMD64 fst opcode. */
-        case /* 409 */ OP_fstp:    /**< IA-32/AMD64 fstp opcode. */
-        case /* 422 */ OP_fild:    /**< IA-32/AMD64 fild opcode. */
-        case /* 423 */ OP_fist:    /**< IA-32/AMD64 fist opcode. */
-        case /* 424 */ OP_fistp:   /**< IA-32/AMD64 fistp opcode. */
-
-        case /* 430 */ OP_fxch:     /**< IA-32/AMD64 fxch opcode. */
-        case /* 447 */ OP_fxtract:  /**< IA-32/AMD64 fxtract opcode. */
-        case /* 459 */ OP_fcmovb:   /**< IA-32/AMD64 fcmovb opcode. */
-        case /* 460 */ OP_fcmove:   /**< IA-32/AMD64 fcmove opcode. */
-        case /* 461 */ OP_fcmovbe:  /**< IA-32/AMD64 fcmovbe opcode. */
-        case /* 462 */ OP_fcmovu:   /**< IA-32/AMD64 fcmovu opcode. */
-        case /* 463 */ OP_fucompp:  /**< IA-32/AMD64 fucompp opcode. */
-        case /* 464 */ OP_fcmovnb:  /**< IA-32/AMD64 fcmovnb opcode. */
-        case /* 465 */ OP_fcmovne:  /**< IA-32/AMD64 fcmovne opcode. */
-        case /* 466 */ OP_fcmovnbe: /**< IA-32/AMD64 fcmovnbe opcode. */
-        case /* 467 */ OP_fcmovnu:  /**< IA-32/AMD64 fcmovnu opcode. */
-
-        /* x64 */
-        case /* 597 */ OP_movsxd: /**< IA-32/AMD64 movsxd opcode. */
-
-        /* AMD TBM */
-        case /* 1041 */ OP_bextr:   /**< IA-32/AMD64 bextr opcode. */
-        case /* 1042 */ OP_blcfill: /**< IA-32/AMD64 blcfill opcode. */
-        case /* 1043 */ OP_blci:    /**< IA-32/AMD64 blci opcode. */
-        case /* 1044 */ OP_blcic:   /**< IA-32/AMD64 blcic opcode. */
-        case /* 1045 */ OP_blcmsk:  /**< IA-32/AMD64 blcmsk opcode. */
-        case /* 1046 */ OP_blcs:    /**< IA-32/AMD64 blcs opcode. */
-        case /* 1047 */ OP_blsfill: /**< IA-32/AMD64 blsfill opcode. */
-        case /* 1048 */ OP_blsic:   /**< IA-32/AMD64 blsic opcode. */
-        case /* 1049 */ OP_t1mskc:  /**< IA-32/AMD64 t1mskc opcode. */
-        case /* 1050 */ OP_tzmsk:   /**< IA-32/AMD64 tzmsk opcode. */
+        case /* 253 */ OP_rol:         /**< IA-32/AMD64 rol opcode. */
+        case /* 254 */ OP_ror:         /**< IA-32/AMD64 ror opcode. */
+        case /* 255 */ OP_rcl:         /**< IA-32/AMD64 rcl opcode. */
+        case /* 256 */ OP_rcr:         /**< IA-32/AMD64 rcr opcode. */
+        case /* 257 */ OP_shl:         /**< IA-32/AMD64 shl opcode. */
+        case /* 258 */ OP_shr:         /**< IA-32/AMD64 shr opcode. */
+        case /* 259 */ OP_sar:         /**< IA-32/AMD64 sar opcode. */
+        case /* 260 */ OP_not:         /**< IA-32/AMD64 not opcode. */
+        case /* 261 */ OP_neg:         /**< IA-32/AMD64 neg opcode. */
+        case /* 262 */ OP_mul:         /**< IA-32/AMD64 mul opcode. */
+        case /* 263 */ OP_div:         /**< IA-32/AMD64 div opcode. */
+        case /* 264 */ OP_idiv:        /**< IA-32/AMD64 idiv opcode. */
 
         /* Intel BMI1 */
         /* (includes non-immed form of OP_bextr) */
-        case /* 1056 */ OP_blsr:   /**< IA-32/AMD64 blsr opcode. */
-        case /* 1057 */ OP_blsmsk: /**< IA-32/AMD64 blsmsk opcode. */
-        case /* 1058 */ OP_blsi:   /**< IA-32/AMD64 blsi opcode. */
+        case /* 1055 */ OP_andn:   /**< IA-32/AMD64 andn opcode. */
+        case /* 1059 */ OP_tzcnt:  /**< IA-32/AMD64 tzcnt opcode. */
 
         /* Intel BMI2 */
-        case /* 1060 */ OP_bzhi: /**< IA-32/AMD64 bzhi opcode. */
-        case /* 1061 */ OP_pext: /**< IA-32/AMD64 pext opcode. */
-        case /* 1062 */ OP_pdep: /**< IA-32/AMD64 pdep opcode. */ return true;
+        case /* 1063 */ OP_sarx: /**< IA-32/AMD64 sarx opcode. */
+        case /* 1064 */ OP_shlx: /**< IA-32/AMD64 shlx opcode. */
+        case /* 1065 */ OP_shrx: /**< IA-32/AMD64 shrx opcode. */
+        case /* 1066 */ OP_rorx: /**< IA-32/AMD64 rorx opcode. */
+        case /* 1067 */ OP_mulx: /**< IA-32/AMD64 mulx opcode. */
 
-        default: return false;
-    }
-}
+        /* Intel ADX */
+        case /* 1105 */ OP_adox: /**< IA-32/AMD64 adox opcode. */
+        case /* 1106 */ OP_adcx: /**< IA-32/AMD64 adox opcode. */
 
-bool op_is_simd_integer(int op_code) {
-    switch (op_code) {
+        /*
+         * SIMD
+         */
         case /* 130 */ OP_pcmpgtb:    /**< IA-32/AMD64 pcmpgtb opcode. */
         case /* 131 */ OP_pcmpgtw:    /**< IA-32/AMD64 pcmpgtw opcode. */
         case /* 132 */ OP_pcmpgtd:    /**< IA-32/AMD64 pcmpgtd opcode. */
@@ -3149,73 +3218,62 @@ bool op_is_simd_integer(int op_code) {
     }
 }
 
-bool op_is_scalar_integer(int op_code) {
+DR_API
+bool
+op_is_float(int op_code) {
     switch (op_code) {
-        case /*   4 */ OP_add:      /**< IA-32/AMD64 add opcode. */
-        case /*   5 */ OP_or:       /**< IA-32/AMD64 or opcode. */
-        case /*   6 */ OP_adc:      /**< IA-32/AMD64 adc opcode. */
-        case /*   7 */ OP_sbb:      /**< IA-32/AMD64 sbb opcode. */
-        case /*   8 */ OP_and:      /**< IA-32/AMD64 and opcode. */
-        case /*  10 */ OP_sub:      /**< IA-32/AMD64 sub opcode. */
-        case /*  12 */ OP_xor:      /**< IA-32/AMD64 xor opcode. */
-        case /*  14 */ OP_cmp:      /**< IA-32/AMD64 cmp opcode. */
-        case /*  16 */ OP_inc:      /**< IA-32/AMD64 inc opcode. */
-        case /*  17 */ OP_dec:      /**< IA-32/AMD64 dec opcode. */
-        case /*  25 */ OP_imul:     /**< IA-32/AMD64 imul opcode. */
+        /*
+         * Scalar
+         */
+        case /* 399 */ OP_fadd:    /**< IA-32/AMD64 fadd opcode. */
+        case /* 400 */ OP_fmul:    /**< IA-32/AMD64 fmul opcode. */
+        case /* 401 */ OP_fcom:    /**< IA-32/AMD64 fcom opcode. */
+        case /* 402 */ OP_fcomp:   /**< IA-32/AMD64 fcomp opcode. */
+        case /* 403 */ OP_fsub:    /**< IA-32/AMD64 fsub opcode. */
+        case /* 404 */ OP_fsubr:   /**< IA-32/AMD64 fsubr opcode. */
+        case /* 405 */ OP_fdiv:    /**< IA-32/AMD64 fdiv opcode. */
+        case /* 406 */ OP_fdivr:   /**< IA-32/AMD64 fdivr opcode. */
+        case /* 414 */ OP_fiadd:   /**< IA-32/AMD64 fiadd opcode. */
+        case /* 415 */ OP_fimul:   /**< IA-32/AMD64 fimul opcode. */
+        case /* 416 */ OP_ficom:   /**< IA-32/AMD64 ficom opcode. */
+        case /* 417 */ OP_ficomp:  /**< IA-32/AMD64 ficomp opcode. */
+        case /* 418 */ OP_fisub:   /**< IA-32/AMD64 fisub opcode. */
+        case /* 419 */ OP_fisubr:  /**< IA-32/AMD64 fisubr opcode. */
+        case /* 420 */ OP_fidiv:   /**< IA-32/AMD64 fidiv opcode. */
+        case /* 421 */ OP_fidivr:  /**< IA-32/AMD64 fidivr opcode. */
 
-        case /*  60 */ OP_test:  /**< IA-32/AMD64 test opcode. */
-        case /*  61 */ OP_lea:   /**< IA-32/AMD64 lea opcode. */
+        case /* 432 */ OP_fchs:     /**< IA-32/AMD64 fchs opcode. */
+        case /* 433 */ OP_fabs:     /**< IA-32/AMD64 fabs opcode. */
+        case /* 434 */ OP_ftst:     /**< IA-32/AMD64 ftst opcode. */
+        case /* 435 */ OP_fxam:     /**< IA-32/AMD64 fxam opcode. */
+        case /* 443 */ OP_f2xm1:    /**< IA-32/AMD64 f2xm1 opcode. */
+        case /* 444 */ OP_fyl2x:    /**< IA-32/AMD64 fyl2x opcode. */
+        case /* 445 */ OP_fptan:    /**< IA-32/AMD64 fptan opcode. */
+        case /* 446 */ OP_fpatan:   /**< IA-32/AMD64 fpatan opcode. */
+        case /* 448 */ OP_fprem1:   /**< IA-32/AMD64 fprem1 opcode. */
+        case /* 451 */ OP_fprem:    /**< IA-32/AMD64 fprem opcode. */
+        case /* 452 */ OP_fyl2xp1:  /**< IA-32/AMD64 fyl2xp1 opcode. */
+        case /* 453 */ OP_fsqrt:    /**< IA-32/AMD64 fsqrt opcode. */
+        case /* 454 */ OP_fsincos:  /**< IA-32/AMD64 fsincos opcode. */
+        case /* 455 */ OP_frndint:  /**< IA-32/AMD64 frndint opcode. */
+        case /* 456 */ OP_fscale:   /**< IA-32/AMD64 fscale opcode. */
+        case /* 457 */ OP_fsin:     /**< IA-32/AMD64 fsin opcode. */
+        case /* 458 */ OP_fcos:     /**< IA-32/AMD64 fcos opcode. */
+        case /* 473 */ OP_fucom:    /**< IA-32/AMD64 fucom opcode. */
+        case /* 474 */ OP_fucomp:   /**< IA-32/AMD64 fucomp opcode. */
+        case /* 475 */ OP_faddp:    /**< IA-32/AMD64 faddp opcode. */
+        case /* 476 */ OP_fmulp:    /**< IA-32/AMD64 fmulp opcode. */
+        case /* 477 */ OP_fcompp:   /**< IA-32/AMD64 fcompp opcode. */
+        case /* 478 */ OP_fsubrp:   /**< IA-32/AMD64 fsubrp opcode. */
+        case /* 479 */ OP_fsubp:    /**< IA-32/AMD64 fsubp opcode. */
+        case /* 480 */ OP_fdivrp:   /**< IA-32/AMD64 fdivrp opcode. */
+        case /* 481 */ OP_fdivp:    /**< IA-32/AMD64 fdivp opcode. */
+        case /* 482 */ OP_fucomip:  /**< IA-32/AMD64 fucomip opcode. */
+        case /* 483 */ OP_fcomip:   /**< IA-32/AMD64 fcomip opcode. */
 
-        case /*  63 */ OP_cwde:  /**< IA-32/AMD64 cwde opcode. */
-        case /*  64 */ OP_cdq:   /**< IA-32/AMD64 cdq opcode. */
-
-        case /* 185 */ OP_bt:         /**< IA-32/AMD64 bt opcode. */
-        case /* 186 */ OP_shld:       /**< IA-32/AMD64 shld opcode. */
-        case /* 188 */ OP_bts:        /**< IA-32/AMD64 bts opcode. */
-        case /* 189 */ OP_shrd:       /**< IA-32/AMD64 shrd opcode. */
-        case /* 192 */ OP_btr:        /**< IA-32/AMD64 btr opcode. */
-
-        case /* 197 */ OP_btc:        /**< IA-32/AMD64 btc opcode. */
-        case /* 198 */ OP_bsf:        /**< IA-32/AMD64 bsf opcode. */
-        case /* 199 */ OP_bsr:        /**< IA-32/AMD64 bsr opcode. */
-        case /* 201 */ OP_xadd:       /**< IA-32/AMD64 xadd opcode. */
-        case /* 205 */ OP_bswap:      /**< IA-32/AMD64 bswap opcode. */
-
-        case /* 253 */ OP_rol:         /**< IA-32/AMD64 rol opcode. */
-        case /* 254 */ OP_ror:         /**< IA-32/AMD64 ror opcode. */
-        case /* 255 */ OP_rcl:         /**< IA-32/AMD64 rcl opcode. */
-        case /* 256 */ OP_rcr:         /**< IA-32/AMD64 rcr opcode. */
-        case /* 257 */ OP_shl:         /**< IA-32/AMD64 shl opcode. */
-        case /* 258 */ OP_shr:         /**< IA-32/AMD64 shr opcode. */
-        case /* 259 */ OP_sar:         /**< IA-32/AMD64 sar opcode. */
-        case /* 260 */ OP_not:         /**< IA-32/AMD64 not opcode. */
-        case /* 261 */ OP_neg:         /**< IA-32/AMD64 neg opcode. */
-        case /* 262 */ OP_mul:         /**< IA-32/AMD64 mul opcode. */
-        case /* 263 */ OP_div:         /**< IA-32/AMD64 div opcode. */
-        case /* 264 */ OP_idiv:        /**< IA-32/AMD64 idiv opcode. */
-
-        /* Intel BMI1 */
-        /* (includes non-immed form of OP_bextr) */
-        case /* 1055 */ OP_andn:   /**< IA-32/AMD64 andn opcode. */
-        case /* 1059 */ OP_tzcnt:  /**< IA-32/AMD64 tzcnt opcode. */
-
-        /* Intel BMI2 */
-        case /* 1063 */ OP_sarx: /**< IA-32/AMD64 sarx opcode. */
-        case /* 1064 */ OP_shlx: /**< IA-32/AMD64 shlx opcode. */
-        case /* 1065 */ OP_shrx: /**< IA-32/AMD64 shrx opcode. */
-        case /* 1066 */ OP_rorx: /**< IA-32/AMD64 rorx opcode. */
-        case /* 1067 */ OP_mulx: /**< IA-32/AMD64 mulx opcode. */
-
-        /* Intel ADX */
-        case /* 1105 */ OP_adox: /**< IA-32/AMD64 adox opcode. */
-        case /* 1106 */ OP_adcx: /**< IA-32/AMD64 adox opcode. */ return true;
-
-        default: return false;
-    }
-}
-
-bool op_is_simd_float(int op_code) {
-    switch (op_code) {
+        /*
+         * SIMD
+         */
         case /* 319 */ OP_ucomiss:   /**< IA-32/AMD64 ucomiss opcode. */
         case /* 320 */ OP_ucomisd:   /**< IA-32/AMD64 ucomisd opcode. */
         case /* 321 */ OP_comiss:    /**< IA-32/AMD64 comiss opcode. */
@@ -3511,59 +3569,9 @@ bool op_is_simd_float(int op_code) {
     }
 }
 
-bool op_is_scalar_float(int op_code) {
-    switch (op_code) {
-        case /* 399 */ OP_fadd:    /**< IA-32/AMD64 fadd opcode. */
-        case /* 400 */ OP_fmul:    /**< IA-32/AMD64 fmul opcode. */
-        case /* 401 */ OP_fcom:    /**< IA-32/AMD64 fcom opcode. */
-        case /* 402 */ OP_fcomp:   /**< IA-32/AMD64 fcomp opcode. */
-        case /* 403 */ OP_fsub:    /**< IA-32/AMD64 fsub opcode. */
-        case /* 404 */ OP_fsubr:   /**< IA-32/AMD64 fsubr opcode. */
-        case /* 405 */ OP_fdiv:    /**< IA-32/AMD64 fdiv opcode. */
-        case /* 406 */ OP_fdivr:   /**< IA-32/AMD64 fdivr opcode. */
-        case /* 414 */ OP_fiadd:   /**< IA-32/AMD64 fiadd opcode. */
-        case /* 415 */ OP_fimul:   /**< IA-32/AMD64 fimul opcode. */
-        case /* 416 */ OP_ficom:   /**< IA-32/AMD64 ficom opcode. */
-        case /* 417 */ OP_ficomp:  /**< IA-32/AMD64 ficomp opcode. */
-        case /* 418 */ OP_fisub:   /**< IA-32/AMD64 fisub opcode. */
-        case /* 419 */ OP_fisubr:  /**< IA-32/AMD64 fisubr opcode. */
-        case /* 420 */ OP_fidiv:   /**< IA-32/AMD64 fidiv opcode. */
-        case /* 421 */ OP_fidivr:  /**< IA-32/AMD64 fidivr opcode. */
-
-        case /* 432 */ OP_fchs:     /**< IA-32/AMD64 fchs opcode. */
-        case /* 433 */ OP_fabs:     /**< IA-32/AMD64 fabs opcode. */
-        case /* 434 */ OP_ftst:     /**< IA-32/AMD64 ftst opcode. */
-        case /* 435 */ OP_fxam:     /**< IA-32/AMD64 fxam opcode. */
-        case /* 443 */ OP_f2xm1:    /**< IA-32/AMD64 f2xm1 opcode. */
-        case /* 444 */ OP_fyl2x:    /**< IA-32/AMD64 fyl2x opcode. */
-        case /* 445 */ OP_fptan:    /**< IA-32/AMD64 fptan opcode. */
-        case /* 446 */ OP_fpatan:   /**< IA-32/AMD64 fpatan opcode. */
-        case /* 448 */ OP_fprem1:   /**< IA-32/AMD64 fprem1 opcode. */
-        case /* 451 */ OP_fprem:    /**< IA-32/AMD64 fprem opcode. */
-        case /* 452 */ OP_fyl2xp1:  /**< IA-32/AMD64 fyl2xp1 opcode. */
-        case /* 453 */ OP_fsqrt:    /**< IA-32/AMD64 fsqrt opcode. */
-        case /* 454 */ OP_fsincos:  /**< IA-32/AMD64 fsincos opcode. */
-        case /* 455 */ OP_frndint:  /**< IA-32/AMD64 frndint opcode. */
-        case /* 456 */ OP_fscale:   /**< IA-32/AMD64 fscale opcode. */
-        case /* 457 */ OP_fsin:     /**< IA-32/AMD64 fsin opcode. */
-        case /* 458 */ OP_fcos:     /**< IA-32/AMD64 fcos opcode. */
-        case /* 473 */ OP_fucom:    /**< IA-32/AMD64 fucom opcode. */
-        case /* 474 */ OP_fucomp:   /**< IA-32/AMD64 fucomp opcode. */
-        case /* 475 */ OP_faddp:    /**< IA-32/AMD64 faddp opcode. */
-        case /* 476 */ OP_fmulp:    /**< IA-32/AMD64 fmulp opcode. */
-        case /* 477 */ OP_fcompp:   /**< IA-32/AMD64 fcompp opcode. */
-        case /* 478 */ OP_fsubrp:   /**< IA-32/AMD64 fsubrp opcode. */
-        case /* 479 */ OP_fsubp:    /**< IA-32/AMD64 fsubp opcode. */
-        case /* 480 */ OP_fdivrp:   /**< IA-32/AMD64 fdivrp opcode. */
-        case /* 481 */ OP_fdivp:    /**< IA-32/AMD64 fdivp opcode. */
-        case /* 482 */ OP_fucomip:  /**< IA-32/AMD64 fucomip opcode. */
-        case /* 483 */ OP_fcomip:   /**< IA-32/AMD64 fcomip opcode. */ return true;
-
-        default: return false;
-    }
-}
-
-bool op_is_branch(int op_code) {
+DR_API
+bool
+op_is_branch(int op_code) {
     switch (op_code) {
         case /*  26 */ OP_jo_short:   /**< IA-32/AMD64 jo_short opcode. */
         case /*  27 */ OP_jno_short:  /**< IA-32/AMD64 jno_short opcode. */
@@ -3631,7 +3639,9 @@ bool op_is_branch(int op_code) {
     }
 }
 
-bool op_is_stack(int op_code) {
+DR_API
+bool
+op_is_stack(int op_code) {
     switch (op_code) {
         case /*  18 */ OP_push:     /**< IA-32/AMD64 push opcode. */
         case /*  19 */ OP_push_imm: /**< IA-32/AMD64 push_imm opcode. */
@@ -3671,7 +3681,7 @@ bool op_is_stack(int op_code) {
 }
 
 /*
- * NOT CLASIFIED INSTRUCTIONS
+ * UNCLASSIFIED INSTRUCTIONS
  */
 
 // /*  65 */ OP_fwait, /**< IA-32/AMD64 fwait opcode. */

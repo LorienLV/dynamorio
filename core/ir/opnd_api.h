@@ -2602,8 +2602,16 @@ reg_is_segment(reg_id_t reg);
 DR_API
 /**
  * Assumes that \p reg is a DR_REG_ constant.
- * Returns true iff it refers to a multimedia register used for
+ * Returns true iff it refers to a stack register used for
  * SIMD instructions.
+ */
+bool
+reg_is_stack(reg_id_t reg);
+
+DR_API
+/**
+ * Assumes that \p reg is a DR_REG_ constant.
+ * Returns true iff it refers to a stack register (stack pointer or base pointer).
  */
 bool
 reg_is_simd(reg_id_t reg);

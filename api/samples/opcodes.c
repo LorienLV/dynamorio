@@ -52,10 +52,6 @@
 
 #define NULL_TERMINATE(buf) (buf)[(sizeof((buf)) / sizeof((buf)[0])) - 1] = '\0'
 
-// An instruction is considered scalar if its source/destination register has at
-// maximum MAX_SCALAR_INSTR_BITS.
-#define MAX_SCALAR_INSTR_BITS 64
-
 /* We keep a separate execution count per opcode.
  *
  * XXX: our counters are racy on ARM.  We use DRX_COUNTER_LOCK to make them atomic
@@ -148,30 +144,8 @@ static dr_emit_flags_t
 event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *instr,
                       bool for_trace, bool translating, void *user_data);
 
-// TODO instruction can also be non-simd if this returns true.
-static bool reg_is_simd(reg_id_t reg) {
-    return reg_get_bits(reg) > MAX_SCALAR_INSTR_BITS;
-}
-
-static bool instr_is_simd(instr_t *instr) {
-    // If the source or destination register is a SIMD register, the instruction
-    // is SIMD
-    for (int a = 0; a < instr_num_srcs(instr); a++) {
-        if (reg_is_simd(opnd_get_reg(instr_get_src(instr, a)))) {
-            return true;
-        }
-    }
-    for (int a = 0; a < instr_num_dsts(instr); a++) {
-        if (reg_is_simd(opnd_get_reg(instr_get_dst(instr, a)))) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *instr,
-                                 int num_reads_mem, int num_writes_mem) {
+                                 instr_t *ins, int num_reads_mem, int num_writes_mem) {
     bool added = false;
 
     // To avoid calling drx_insert all the time.
@@ -181,28 +155,15 @@ static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *inst
                 &op_type_count[(op_type)],(cnt),DRX_COUNTER_64BIT); \
             added = true;
 
-    int op_code = instr_get_opcode(instr);
-
-    bool instr_is_simd = instr_is_simd(instr);
-
     // x86 can read and write memory in the same instruction.
     if (num_reads_mem > 0 || num_reads_mem > 0) {
-        if (op_is_stack(op_code)) {
+        if (instr_is_stack(ins)) {
             increment_counter(OP_TYPE_STACK, num_reads_mem + num_reads_mem);
         }
-        else if (op_is_mov(op_code) || op_is_integer(op_code) || op_is_float(op_code)) {
-            if (instr_is_simd) {
-                // simd load or simd instruction that reads memory.
-                if (num_reads_mem > 0) {
-                    increment_counter(OP_TYPE_SIMD_LOAD, num_reads_mem);
-                }
+        // mov/integer/float
+        else {
+            if (instr_is_scalar(ins)) {
                 // scalar load or scalar instruction that writes memory.
-                if (num_writes_mem > 0) {
-                    increment_counter(OP_TYPE_SIMD_STORE, num_writes_mem);
-                }
-            }
-            else {
-                // simd store or simd instruction that reads memory.
                 if (num_reads_mem > 0) {
                     increment_counter(OP_TYPE_SCALAR_LOAD, num_reads_mem);
                 }
@@ -211,40 +172,44 @@ static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *inst
                     increment_counter(OP_TYPE_SCALAR_STORE, num_writes_mem);
                 }
             }
+            else if (instr_is_simd(ins)) {
+                // simd load or simd instruction that reads memory.
+                if (num_reads_mem > 0) {
+                    increment_counter(OP_TYPE_SIMD_LOAD, num_reads_mem);
+                }
+                // simd store or simd instruction that reads memory.
+                if (num_writes_mem > 0) {
+                    increment_counter(OP_TYPE_SIMD_STORE, num_writes_mem);
+                }
+            }
+            // else { Not sure if this is possible. SIMD else if added just in case...
         }
     }
-    else if (op_is_mov(op_code)) {
-        // simd register instruction
-        if (instr_is_simd) {
-            increment_counter(OP_TYPE_SIMD_REGISTER, 1);
-        }
+    else if (instr_is_scalar_mov(ins)) {
         // scalar register instruction
-        else {
-            increment_counter(OP_TYPE_SCALAR_REGISTER, 1);
-        }
+        increment_counter(OP_TYPE_SCALAR_REGISTER, 1);
+    }
+    else if (instr_is_simd_mov(ins)) {
+        // simd register instruction
+        increment_counter(OP_TYPE_SIMD_REGISTER, 1);
     }
 
     // x86 can read/write memory and compute in the same instruction.
+    if (instr_is_scalar_integer(ins)) {
+        increment_counter(OP_TYPE_SCALAR_INTEGER, 1);
+    }
+    else if (instr_is_simd_integer(ins)) {
+        increment_counter(OP_TYPE_SIMD_INTEGER, 1);
+    }
+    else if (instr_is_scalar_float(ins)) {
+        increment_counter(OP_TYPE_SCALAR_FLOAT, 1);
+    }
+    else if (instr_is_simd_float(ins)){
+        increment_counter(OP_TYPE_SIMD_FLOAT, 1);
+    }
+
     // x86 can increment a variable and branch on the same instruction.
-    if (op_is_integer(op_code)) {
-        if (instr_is_simd) {
-            increment_counter(OP_TYPE_SIMD_INTEGER, 1);
-        }
-        else {
-            increment_counter(OP_TYPE_SCALAR_INTEGER, 1);
-        }
-    }
-
-    if (op_is_float(op_code)) {
-        if (instr_is_simd) {
-            increment_counter(OP_TYPE_SIMD_FLOAT, 1);
-        }
-        else {
-            increment_counter(OP_TYPE_SCALAR_FLOAT, 1);
-        }
-    }
-
-    if (op_is_branch(op_code)) {
+    if (instr_is_branch(ins)) {
         increment_counter(OP_TYPE_BRANCH, 1);
     }
 
@@ -252,7 +217,7 @@ static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *inst
         increment_counter(OP_TYPE_OTHER, 1);
     }
 
-    #undef add_one
+    #undef increment_counter
 }
 
 DR_EXPORT void
@@ -473,7 +438,7 @@ event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *inst
                 drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)
                 &total_bytes_write,num_bytes_write,DRX_COUNTER_64BIT);
 
-            update_op_type_count(drcontext, bb, instr, num_mem_reads, num_mem_writes);
+            update_op_type_count(drcontext, bb, instr, ins, num_mem_reads, num_mem_writes);
 
             drx_insert_counter_update(
                 drcontext,bb,instr,SPILL_SLOT_MAX+1,IF_AARCHXX_(SPILL_SLOT_MAX+1)

@@ -745,7 +745,7 @@ reg_is_simd(reg_id_t reg)
 bool
 reg_is_vector_simd(reg_id_t reg)
 {
-    return false;
+    return (reg >= DR_REG_Q0 && reg <= DR_REG_Q31);
 }
 
 bool
@@ -2076,13 +2076,13 @@ instr_is_simd(instr_t *instr) {
     opnd_t opnd;
     for (int i = 0; i < instr_num_dsts(instr); i++) {
         opnd = instr_get_dst(instr, i);
-        if (opnd_is_reg(opnd) && reg_is_simd(opnd_get_reg(opnd))) {
+        if (opnd_is_reg(opnd) && reg_is_vector_simd(opnd_get_reg(opnd))) {
             return true;
         }
     }
     for (int i = 0; i < instr_num_srcs(instr); i++) {
         opnd = instr_get_src(instr, i);
-        if (opnd_is_reg(opnd) && reg_is_simd(opnd_get_reg(opnd))) {
+        if (opnd_is_reg(opnd) && reg_is_vector_simd(opnd_get_reg(opnd))) {
             return true;
         }
     }

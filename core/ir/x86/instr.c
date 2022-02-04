@@ -1685,6 +1685,44 @@ instr_is_mmx(instr_t *instr)
     return false;
 }
 
+// static bool
+// instr_has_ymm_opnd(instr_t *instr)
+// {
+//     int i;
+//     opnd_t opnd;
+//     CLIENT_ASSERT(instr_operands_valid(instr), "instr_shrink_to_16_bits: invalid opnds");
+//     for (i = 0; i < instr_num_dsts(instr); i++) {
+//         opnd = instr_get_dst(instr, i);
+//         if (opnd_is_reg(opnd) && reg_is_strictly_ymm(opnd_get_reg(opnd)))
+//             return true;
+//     }
+//     for (i = 0; i < instr_num_srcs(instr); i++) {
+//         opnd = instr_get_src(instr, i);
+//         if (opnd_is_reg(opnd) && reg_is_strictly_ymm(opnd_get_reg(opnd)))
+//             return true;
+//     }
+//     return false;
+// }
+
+// static bool
+// instr_has_zmm_opnd(instr_t *instr)
+// {
+//     int i;
+//     opnd_t opnd;
+//     CLIENT_ASSERT(instr_operands_valid(instr), "instr_shrink_to_16_bits: invalid opnds");
+//     for (i = 0; i < instr_num_dsts(instr); i++) {
+//         opnd = instr_get_dst(instr, i);
+//         if (opnd_is_reg(opnd) && reg_is_strictly_zmm(opnd_get_reg(opnd)))
+//             return true;
+//     }
+//     for (i = 0; i < instr_num_srcs(instr); i++) {
+//         opnd = instr_get_src(instr, i);
+//         if (opnd_is_reg(opnd) && reg_is_strictly_zmm(opnd_get_reg(opnd)))
+//             return true;
+//     }
+//     return false;
+// }
+
 bool
 instr_is_opmask(instr_t *instr)
 {
@@ -2316,21 +2354,8 @@ instr_is_gather(instr_t *instr)
     }
 }
 
-DR_API
-bool
-instr_is_simd(instr_t *instr) {
-    return instr_is_simd_mov(instr) || instr_is_simd_float(instr) || instr_is_simd_integer(instr);
-}
-
-DR_API
-bool
-instr_is_scalar(instr_t *instr) {
-    return !instr_is_simd(instr);
-}
-
 // TODO: CONVERT (cvt)
-DR_API
-bool
+static bool
 instr_is_scalar_mov(instr_t *instr) {
     switch (instr_get_opcode(instr)) {
         /* point ld & st at eAX & al instrs, they save 1 byte (no modrm),
@@ -2498,7 +2523,7 @@ instr_is_scalar_mov(instr_t *instr) {
     }
 }
 
-bool
+static bool
 instr_is_simd_mov(instr_t *instr) {
     switch (instr_get_opcode(instr)) {
         case /* 102 */ OP_movntps:   /**< IA-32/AMD64 movntps opcode. */
@@ -2841,6 +2866,11 @@ instr_is_simd_mov(instr_t *instr) {
 
 DR_API
 bool
+instr_is_ldst(instr_t *instr) {
+    return instr_is_scalar_mov(instr) || instr_is_simd_mov(instr);
+}
+
+static bool
 instr_is_scalar_integer(instr_t *instr) {
     switch (instr_get_opcode(instr)) {
         case /*   4 */ OP_add:      /**< IA-32/AMD64 add opcode. */
@@ -2910,8 +2940,7 @@ instr_is_scalar_integer(instr_t *instr) {
     }
 }
 
-DR_API
-bool
+static bool
 instr_is_simd_integer(instr_t *instr) {
     switch (instr_get_opcode(instr)) {
         case /* 130 */ OP_pcmpgtb:    /**< IA-32/AMD64 pcmpgtb opcode. */
@@ -3263,6 +3292,11 @@ instr_is_simd_integer(instr_t *instr) {
 
 DR_API
 bool
+instr_is_integer(instr_t *instr) {
+    return instr_is_scalar_integer(instr) || instr_is_simd_integer(instr);
+}
+
+static bool
 instr_is_scalar_float(instr_t *instr) {
     switch (instr_get_opcode(instr)) {
         case /* 399 */ OP_fadd:    /**< IA-32/AMD64 fadd opcode. */
@@ -3506,8 +3540,7 @@ instr_is_scalar_float(instr_t *instr) {
     }
 }
 
-DR_API
-bool
+static bool
 instr_is_simd_float(instr_t *instr) {
     switch (instr_get_opcode(instr)) {
         case /* 325 */ OP_sqrtps:    /**< IA-32/AMD64 sqrtps opcode. */
@@ -3711,6 +3744,12 @@ instr_is_simd_float(instr_t *instr) {
 
         default: return false;
     }
+}
+
+DR_API
+bool
+instr_is_float(instr_t *instr) {
+    return instr_is_scalar_float(instr) || instr_is_simd_float(instr);
 }
 
 DR_API
@@ -4220,3 +4259,45 @@ instr_is_stack(instr_t *instr) {
 // /* Intel MPK extensions */
 // /* 1421 */ OP_rdpkru, /**< IA-32/AMD64 MPK rdpkru opcode. */
 // /* 1422 */ OP_wrpkru, /**< IA-32/AMD64 MPK wrpkru opcode. */
+
+DR_API
+bool
+instr_is_simd(instr_t *instr) {
+    return instr_is_simd_mov(instr) || instr_is_simd_float(instr) || instr_is_simd_integer(instr);
+}
+
+DR_API
+bool
+instr_is_scalar(instr_t *instr) {
+    return !instr_is_simd(instr);
+}
+
+// DR_API
+// bool
+// instr_is_simd_simd_64(instr_t *instr) {
+//     return instr_is_simd(instr) && instr_is_mmx(instr);
+// }
+
+// DR_API
+// bool
+// instr_is_simd_simd_128(instr_t *instr) {
+//     return instr_is_simd(instr) && instr_has_xmm_opnd(instr);
+// }
+
+// DR_API
+// bool
+// instr_is_simd_simd_256(instr_t *instr) {
+//     return instr_is_simd(instr) && instr_has_ymm_opnd(instr);
+// }
+
+// DR_API
+// bool
+// instr_is_simd_simd_512(instr_t *instr) {
+//     return instr_is_simd(instr) && instr_has_zmm_opnd(instr);
+// }
+
+// DR_API
+// bool
+// instr_is_simd_simd_agn(instr_t *instr) {
+//     return false;
+// }

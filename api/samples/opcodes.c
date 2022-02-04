@@ -155,6 +155,8 @@ static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *inst
                 &op_type_count[(op_type)],(cnt),DRX_COUNTER_64BIT); \
             added = true;
 
+    bool is_simd = instr_is_simd(ins);
+
     // x86 can read and write memory in the same instruction.
     if (num_reads_mem > 0 || num_reads_mem > 0) {
         if (instr_is_stack(ins)) {
@@ -162,17 +164,7 @@ static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *inst
         }
         // mov/integer/float
         else {
-            if (instr_is_scalar(ins)) {
-                // scalar load or scalar instruction that writes memory.
-                if (num_reads_mem > 0) {
-                    increment_counter(OP_TYPE_SCALAR_LOAD, num_reads_mem);
-                }
-                // scalar store or scalar instruction that writes memory.
-                if (num_writes_mem > 0) {
-                    increment_counter(OP_TYPE_SCALAR_STORE, num_writes_mem);
-                }
-            }
-            else if (instr_is_simd(ins)) {
+            if (is_simd) {
                 // simd load or simd instruction that reads memory.
                 if (num_reads_mem > 0) {
                     increment_counter(OP_TYPE_SIMD_LOAD, num_reads_mem);
@@ -182,30 +174,45 @@ static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *inst
                     increment_counter(OP_TYPE_SIMD_STORE, num_writes_mem);
                 }
             }
+            else {
+                // scalar load or scalar instruction that writes memory.
+                if (num_reads_mem > 0) {
+                    increment_counter(OP_TYPE_SCALAR_LOAD, num_reads_mem);
+                }
+                // scalar store or scalar instruction that writes memory.
+                if (num_writes_mem > 0) {
+                    increment_counter(OP_TYPE_SCALAR_STORE, num_writes_mem);
+                }
+            }
             // else { Not sure if this is possible. SIMD else if added just in case...
         }
     }
-    else if (instr_is_scalar_mov(ins)) {
-        // scalar register instruction
-        increment_counter(OP_TYPE_SCALAR_REGISTER, 1);
+    else if (instr_is_ldst(ins)) {
+        if (is_simd) {
+            // simd register instruction
+            increment_counter(OP_TYPE_SIMD_REGISTER, 1);
+        }
+        else {
+            // scalar register instruction
+            increment_counter(OP_TYPE_SCALAR_REGISTER, 1);
+        }
     }
-    else if (instr_is_simd_mov(ins)) {
-        // simd register instruction
-        increment_counter(OP_TYPE_SIMD_REGISTER, 1);
-    }
-
     // x86 can read/write memory and compute in the same instruction.
-    if (instr_is_scalar_integer(ins)) {
-        increment_counter(OP_TYPE_SCALAR_INTEGER, 1);
+    if (instr_is_integer(ins)) {
+        if (is_simd) {
+            increment_counter(OP_TYPE_SIMD_INTEGER, 1);
+        }
+        else {
+            increment_counter(OP_TYPE_SCALAR_INTEGER, 1);
+        }
     }
-    else if (instr_is_simd_integer(ins)) {
-        increment_counter(OP_TYPE_SIMD_INTEGER, 1);
-    }
-    else if (instr_is_scalar_float(ins)) {
-        increment_counter(OP_TYPE_SCALAR_FLOAT, 1);
-    }
-    else if (instr_is_simd_float(ins)){
-        increment_counter(OP_TYPE_SIMD_FLOAT, 1);
+    else if (instr_is_float(ins)) {
+        if (is_simd) {
+            increment_counter(OP_TYPE_SIMD_FLOAT, 1);
+        }
+        else {
+            increment_counter(OP_TYPE_SCALAR_FLOAT, 1);
+        }
     }
 
     // x86 can increment a variable and branch on the same instruction.

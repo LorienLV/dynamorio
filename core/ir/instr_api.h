@@ -1149,51 +1149,21 @@ instr_is_gather(instr_t *instr);
 
 DR_API
 /**
- * Returns true iff \p instr is a simd instruction.
+ * Returns true iff \p instr is a mov instruction.
  */
-bool instr_is_simd(instr_t *instr);
+bool instr_is_ldst(instr_t *instr);
 
 DR_API
 /**
- * Returns true iff \p instr is a scalar instruction.
+ * Returns true iff \p instr is an integer instruction.
  */
-bool instr_is_scalar(instr_t *instr);
+bool instr_is_integer(instr_t *instr);
 
 DR_API
 /**
- * Returns true iff \p instr is a scalar mov instruction.
+ * Returns true iff \p instr is a float instruction.
  */
-bool instr_is_scalar_mov(instr_t *instr);
-
-DR_API
-/**
- * Returns true iff \p instr is a simd mov instruction.
- */
-bool instr_is_simd_mov(instr_t *instr);
-
-DR_API
-/**
- * Returns true iff \p instr is a scalar integer instruction.
- */
-bool instr_is_scalar_integer(instr_t *instr);
-
-DR_API
-/**
- * Returns true iff \p instr is a simd integer instruction.
- */
-bool instr_is_simd_integer(instr_t *instr);
-
-DR_API
-/**
- * Returns true iff \p instr is a scalar float instruction.
- */
-bool instr_is_scalar_float(instr_t *instr);
-
-DR_API
-/**
- * Returns true iff \p instr is a simd float instruction.
- */
-bool instr_is_simd_float(instr_t *instr);
+bool instr_is_float(instr_t *instr);
 
 DR_API
 /**
@@ -1206,6 +1176,18 @@ DR_API
  * Returns true iff \p instr is an stack instruction.
  */
 bool instr_is_stack(instr_t *instr);
+
+DR_API
+/**
+ * Returns true iff \p instr is a simd instruction.
+ */
+bool instr_is_simd(instr_t *instr);
+
+DR_API
+/**
+ * Returns true iff \p instr is a scalar instruction.
+ */
+bool instr_is_scalar(instr_t *instr);
 
 DR_API
 /**

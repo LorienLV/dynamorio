@@ -1,8 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
+
+#define LINUX
+#define X86_64
+
+#include <dr_api.h>
 
 int main(int argc, char const *argv[]) {
     int which = atoi(argv[1]);
+
+    dr_app_setup();
+    assert(!dr_app_running_under_dynamorio());
+
+    dr_app_start();
+    assert(dr_app_running_under_dynamorio());
 
     switch(which) {
         case 0: {
@@ -53,7 +65,8 @@ int main(int argc, char const *argv[]) {
         }
     }
 
+    dr_app_stop_and_cleanup();
+    assert(!dr_app_running_under_dynamorio());
+
     return 0;
 }
-
-

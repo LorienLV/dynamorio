@@ -349,6 +349,8 @@ event_exit(void)
                "\tMem.Read  %ld\n"
                "\tMem.Write %ld\n"
                "\tMem.R/W   %ld\n",op_memory[3],op_memory[0],op_memory[1],op_memory[2]);
+        
+        fflush(stdout);
     }
 #endif /* SHOW_RESULTS */
     if (!drmgr_unregister_bb_insertion_event(event_app_instruction))

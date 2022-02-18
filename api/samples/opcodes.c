@@ -158,7 +158,7 @@ static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *inst
     bool is_simd = instr_is_simd(ins);
 
     // x86 can read and write memory in the same instruction.
-    if (num_reads_mem > 0 || num_reads_mem > 0) {
+    if (num_reads_mem > 0 || num_writes_mem > 0) {
         if (instr_is_stack(ins)) {
             increment_counter(OP_TYPE_STACK, num_reads_mem + num_reads_mem);
         }

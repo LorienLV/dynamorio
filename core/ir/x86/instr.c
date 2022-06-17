@@ -2354,10 +2354,15 @@ instr_is_gather(instr_t *instr)
     }
 }
 
-// TODO: CONVERT (cvt)
 static bool
 instr_is_scalar_mov(instr_t *instr) {
     switch (instr_get_opcode(instr)) {
+        case /*  18 */ OP_push:     /**< IA-32/AMD64 push opcode. */
+        case /*  19 */ OP_push_imm: /**< IA-32/AMD64 push_imm opcode. */
+        case /*  20 */ OP_pop:      /**< IA-32/AMD64 pop opcode. */
+        case /*  21 */ OP_pusha:    /**< IA-32/AMD64 pusha opcode. */
+        case /*  22 */ OP_popa:     /**< IA-32/AMD64 popa opcode. */
+
         /* point ld & st at eAX & al instrs, they save 1 byte (no modrm),
             * hopefully time taken considering them doesn't offset that */
         case /*  55 */ OP_mov_ld: /**< IA-32/AMD64 mov_ld opcode. */
@@ -2369,6 +2374,11 @@ instr_is_scalar_mov(instr_t *instr) {
         case /*  59 */ OP_mov_priv: /**< IA-32/AMD64 mov_priv opcode. */
 
         case /*  62 */ OP_xchg:  /**< IA-32/AMD64 xchg opcode. */
+
+        case /*  66 */ OP_pushf: /**< IA-32/AMD64 pushf opcode. */
+        case /*  67 */ OP_popf:  /**< IA-32/AMD64 popf opcode. */
+        case /*  74 */ OP_enter: /**< IA-32/AMD64 enter opcode. */
+        case /*  75 */ OP_leave: /**< IA-32/AMD64 leave opcode. */
 
         case /* 110 */ OP_cmovo:   /**< IA-32/AMD64 cmovo opcode. */
         case /* 111 */ OP_cmovno:  /**< IA-32/AMD64 cmovno opcode. */
@@ -2405,6 +2415,7 @@ instr_is_scalar_mov(instr_t *instr) {
         case /* 183 */ OP_setnle: /**< IA-32/AMD64 setnle opcode. */
 
         case /* 190 */ OP_cmpxchg:    /**< IA-32/AMD64 cmpxchg opcode. */
+        case /* 191 */ OP_lss:        /**< IA-32/AMD64 lss opcode. */
 
         case /* 193 */ OP_lfs:        /**< IA-32/AMD64 lfs opcode. */
         case /* 194 */ OP_lgs:        /**< IA-32/AMD64 lgs opcode. */
@@ -2430,7 +2441,19 @@ instr_is_scalar_mov(instr_t *instr) {
         case /* 424 */ OP_fistp:   /**< IA-32/AMD64 fistp opcode. */
 
         case /* 430 */ OP_fxch:     /**< IA-32/AMD64 fxch opcode. */
+        case /* 436 */ OP_fld1:     /**< IA-32/AMD64 fld1 opcode. */
+        case /* 437 */ OP_fldl2t:   /**< IA-32/AMD64 fldl2t opcode. */
+        case /* 438 */ OP_fldl2e:   /**< IA-32/AMD64 fldl2e opcode. */
+        case /* 439 */ OP_fldpi:    /**< IA-32/AMD64 fldpi opcode. */
+        case /* 440 */ OP_fldlg2:   /**< IA-32/AMD64 fldlg2 opcode. */
+        case /* 441 */ OP_fldln2:   /**< IA-32/AMD64 fldln2 opcode. */
+        case /* 442 */ OP_fldz:     /**< IA-32/AMD64 fldz opcode. */
+    
         case /* 447 */ OP_fxtract:  /**< IA-32/AMD64 fxtract opcode. */
+    
+        case /* 449 */ OP_fdecstp:  /**< IA-32/AMD64 fdecstp opcode. */
+        case /* 450 */ OP_fincstp:  /**< IA-32/AMD64 fincstp opcode. */
+    
         case /* 459 */ OP_fcmovb:   /**< IA-32/AMD64 fcmovb opcode. */
         case /* 460 */ OP_fcmove:   /**< IA-32/AMD64 fcmove opcode. */
         case /* 461 */ OP_fcmovbe:  /**< IA-32/AMD64 fcmovbe opcode. */
@@ -2440,6 +2463,17 @@ instr_is_scalar_mov(instr_t *instr) {
         case /* 465 */ OP_fcmovne:  /**< IA-32/AMD64 fcmovne opcode. */
         case /* 466 */ OP_fcmovnbe: /**< IA-32/AMD64 fcmovnbe opcode. */
         case /* 467 */ OP_fcmovnu:  /**< IA-32/AMD64 fcmovnu opcode. */
+
+        case /* 474 */ OP_fucomp:   /**< IA-32/AMD64 fucomp opcode. */
+        case /* 475 */ OP_faddp:    /**< IA-32/AMD64 faddp opcode. */
+        case /* 476 */ OP_fmulp:    /**< IA-32/AMD64 fmulp opcode. */
+        case /* 477 */ OP_fcompp:   /**< IA-32/AMD64 fcompp opcode. */
+        case /* 478 */ OP_fsubrp:   /**< IA-32/AMD64 fsubrp opcode. */
+        case /* 479 */ OP_fsubp:    /**< IA-32/AMD64 fsubp opcode. */
+        case /* 480 */ OP_fdivrp:   /**< IA-32/AMD64 fdivrp opcode. */
+        case /* 481 */ OP_fdivp:    /**< IA-32/AMD64 fdivp opcode. */
+        case /* 482 */ OP_fucomip:  /**< IA-32/AMD64 fucomip opcode. */
+        case /* 483 */ OP_fcomip:   /**< IA-32/AMD64 fcomip opcode. */ 
 
         /* x64 */
         case /* 597 */ OP_movsxd: /**< IA-32/AMD64 movsxd opcode. */
@@ -3299,6 +3333,31 @@ instr_is_integer(instr_t *instr) {
 static bool
 instr_is_scalar_float(instr_t *instr) {
     switch (instr_get_opcode(instr)) {
+        case /* 307 */ OP_cvtpi2ps:  /**< IA-32/AMD64 cvtpi2ps opcode. */
+        case /* 308 */ OP_cvtsi2ss:  /**< IA-32/AMD64 cvtsi2ss opcode. */
+        case /* 309 */ OP_cvtpi2pd:  /**< IA-32/AMD64 cvtpi2pd opcode. */
+        case /* 310 */ OP_cvtsi2sd:  /**< IA-32/AMD64 cvtsi2sd opcode. */
+        case /* 311 */ OP_cvttps2pi: /**< IA-32/AMD64 cvttps2pi opcode. */
+        case /* 312 */ OP_cvttss2si: /**< IA-32/AMD64 cvttss2si opcode. */
+        case /* 313 */ OP_cvttpd2pi: /**< IA-32/AMD64 cvttpd2pi opcode. */
+        case /* 314 */ OP_cvttsd2si: /**< IA-32/AMD64 cvttsd2si opcode. */
+        case /* 315 */ OP_cvtps2pi:  /**< IA-32/AMD64 cvtps2pi opcode. */
+        case /* 316 */ OP_cvtss2si:  /**< IA-32/AMD64 cvtss2si opcode. */
+        case /* 317 */ OP_cvtpd2pi:  /**< IA-32/AMD64 cvtpd2pi opcode. */
+        case /* 318 */ OP_cvtsd2si:  /**< IA-32/AMD64 cvtsd2si opcode. */
+
+        case /* 349 */ OP_cvtps2pd:  /**< IA-32/AMD64 cvtps2pd opcode. */
+        case /* 350 */ OP_cvtss2sd:  /**< IA-32/AMD64 cvtss2sd opcode. */
+        case /* 351 */ OP_cvtpd2ps:  /**< IA-32/AMD64 cvtpd2ps opcode. */
+        case /* 352 */ OP_cvtsd2ss:  /**< IA-32/AMD64 cvtsd2ss opcode. */
+        case /* 353 */ OP_cvtdq2ps:  /**< IA-32/AMD64 cvtdq2ps opcode. */
+        case /* 354 */ OP_cvttps2dq: /**< IA-32/AMD64 cvttps2dq opcode. */
+        case /* 355 */ OP_cvtps2dq:  /**< IA-32/AMD64 cvtps2dq opcode. */
+
+        case /* 378 */ OP_cvtdq2pd:  /**< IA-32/AMD64 cvtdq2pd opcode. */
+        case /* 379 */ OP_cvttpd2dq: /**< IA-32/AMD64 cvttpd2dq opcode. */
+        case /* 380 */ OP_cvtpd2dq:  /**< IA-32/AMD64 cvtpd2dq opcode. */
+
         case /* 399 */ OP_fadd:    /**< IA-32/AMD64 fadd opcode. */
         case /* 400 */ OP_fmul:    /**< IA-32/AMD64 fmul opcode. */
         case /* 401 */ OP_fcom:    /**< IA-32/AMD64 fcom opcode. */
@@ -3603,6 +3662,14 @@ instr_is_simd_float(instr_t *instr) {
         case /* 590 */ OP_dpps:       /**< IA-32/AMD64 dpps opcode. */
         case /* 591 */ OP_dppd:       /**< IA-32/AMD64 dppd opcode. */
 
+        case /* 653 */ OP_vcvtsi2ss:        /**< IA-32/AMD64 vcvtsi2ss opcode. */
+        case /* 654 */ OP_vcvtsi2sd:        /**< IA-32/AMD64 vcvtsi2sd opcode. */
+
+        case /* 657 */ OP_vcvttss2si:       /**< IA-32/AMD64 vcvttss2si opcode. */
+        case /* 658 */ OP_vcvttsd2si:       /**< IA-32/AMD64 vcvttsd2si opcode. */
+        case /* 659 */ OP_vcvtss2si:        /**< IA-32/AMD64 vcvtss2si opcode. */
+        case /* 660 */ OP_vcvtsd2si:        /**< IA-32/AMD64 vcvtsd2si opcode. */
+
         case /* 667 */ OP_vsqrtps:          /**< IA-32/AMD64 vsqrtps opcode. */
 
         case /* 669 */ OP_vsqrtpd:          /**< IA-32/AMD64 vsqrtpd opcode. */
@@ -3610,7 +3677,7 @@ instr_is_simd_float(instr_t *instr) {
         case /* 671 */ OP_vrsqrtps:         /**< IA-32/AMD64 vrsqrtps opcode. */
 
         case /* 673 */ OP_vrcpps:           /**< IA-32/AMD64 vrcpps opcode. */
-        
+
         case /* 675 */ OP_vandps:           /**< IA-32/AMD64 vandps opcode. */
         case /* 676 */ OP_vandpd:           /**< IA-32/AMD64 vandpd opcode. */
         case /* 677 */ OP_vandnps:          /**< IA-32/AMD64 vandnps opcode. */
@@ -3627,6 +3694,13 @@ instr_is_simd_float(instr_t *instr) {
 
         case /* 689 */ OP_vmulpd:           /**< IA-32/AMD64 vmulpd opcode. */
 
+        case /* 691 */ OP_vcvtps2pd:        /**< IA-32/AMD64 vcvtps2pd opcode. */
+        case /* 692 */ OP_vcvtss2sd:        /**< IA-32/AMD64 vcvtss2sd opcode. */
+        case /* 693 */ OP_vcvtpd2ps:        /**< IA-32/AMD64 vcvtpd2ps opcode. */
+        case /* 694 */ OP_vcvtsd2ss:        /**< IA-32/AMD64 vcvtsd2ss opcode. */
+        case /* 695 */ OP_vcvtdq2ps:        /**< IA-32/AMD64 vcvtdq2ps opcode. */
+        case /* 696 */ OP_vcvttps2dq:       /**< IA-32/AMD64 vcvttps2dq opcode. */
+        case /* 697 */ OP_vcvtps2dq:        /**< IA-32/AMD64 vcvtps2dq opcode. */
         case /* 698 */ OP_vsubps:           /**< IA-32/AMD64 vsubps opcode. */
 
         case /* 700 */ OP_vsubpd:           /**< IA-32/AMD64 vsubpd opcode. */
@@ -3644,9 +3718,13 @@ instr_is_simd_float(instr_t *instr) {
         case /* 712 */ OP_vmaxpd:           /**< IA-32/AMD64 vmaxpd opcode. */
 
         case /* 736 */ OP_vcmpps:           /**< IA-32/AMD64 vcmpps opcode. */
-        
+
         case /* 738 */ OP_vcmppd:           /**< IA-32/AMD64 vcmppd opcode. */
-        
+
+        case /* 764 */ OP_vcvtdq2pd:        /**< IA-32/AMD64 vcvtdq2pd opcode. */
+        case /* 765 */ OP_vcvttpd2dq:       /**< IA-32/AMD64 vcvttpd2dq opcode. */
+        case /* 766 */ OP_vcvtpd2dq:        /**< IA-32/AMD64 vcvtpd2dq opcode. */
+
         case /* 794 */ OP_vhaddpd:          /**< IA-32/AMD64 vhaddpd opcode. */
         case /* 795 */ OP_vhaddps:          /**< IA-32/AMD64 vhaddps opcode. */
         case /* 796 */ OP_vhsubpd:          /**< IA-32/AMD64 vhsubpd opcode. */
@@ -3663,6 +3741,8 @@ instr_is_simd_float(instr_t *instr) {
         case /* 875 */ OP_vtestps:          /**< IA-32/AMD64 vtestps opcode. */
         case /* 876 */ OP_vtestpd:          /**< IA-32/AMD64 vtestpd opcode. */
 
+        case /* 891 */ OP_vcvtph2ps: /**< IA-32/AMD64 vcvtph2ps opcode. */
+        case /* 892 */ OP_vcvtps2ph: /**< IA-32/AMD64 vcvtps2ph opcode. */
         case /* 893 */ OP_vfmadd132ps:    /**< IA-32/AMD64 vfmadd132ps opcode. */
         case /* 894 */ OP_vfmadd132pd:    /**< IA-32/AMD64 vfmadd132pd opcode. */
         case /* 895 */ OP_vfmadd213ps:    /**< IA-32/AMD64 vfmadd213ps opcode. */
@@ -3721,6 +3801,31 @@ instr_is_simd_float(instr_t *instr) {
 
         case /* 986 */ OP_vfrczps:     /**< IA-32/AMD64 vfrczps opcode. */
         case /* 987 */ OP_vfrczpd:     /**< IA-32/AMD64 vfrczpd opcode. */
+
+        case /* 1174 */ OP_vcvtpd2qq:       /**< IA-32/AMD64 AVX-512 OP_vcvtpd2qq opcode. */
+        case /* 1175 */ OP_vcvtpd2udq:      /**< IA-32/AMD64 AVX-512 OP_vcvtpd2udq opcode. */
+        case /* 1176 */ OP_vcvtpd2uqq:      /**< IA-32/AMD64 AVX-512 OP_vcvtpd2uqq opcode. */
+        case /* 1177 */ OP_vcvtps2qq:       /**< IA-32/AMD64 AVX-512 OP_vcvtps2qq opcode. */
+        case /* 1178 */ OP_vcvtps2udq:      /**< IA-32/AMD64 AVX-512 OP_vcvtps2udq opcode. */
+        case /* 1179 */ OP_vcvtps2uqq:      /**< IA-32/AMD64 AVX-512 OP_vcvtps2uqq opcode. */
+        case /* 1180 */ OP_vcvtqq2pd:       /**< IA-32/AMD64 AVX-512 OP_vcvtqq2pd opcode. */
+        case /* 1181 */ OP_vcvtqq2ps:       /**< IA-32/AMD64 AVX-512 OP_vcvtqq2ps opcode. */
+        case /* 1182 */ OP_vcvtsd2usi:      /**< IA-32/AMD64 AVX-512 OP_vcvtsd2usi opcode. */
+        case /* 1183 */ OP_vcvtss2usi:      /**< IA-32/AMD64 AVX-512 OP_vcvtss2usi opcode. */
+        case /* 1184 */ OP_vcvttpd2qq:      /**< IA-32/AMD64 AVX-512 OP_vcvttpd2qq opcode. */
+        case /* 1185 */ OP_vcvttpd2udq:     /**< IA-32/AMD64 AVX-512 OP_vcvttpd2udq opcode. */
+        case /* 1186 */ OP_vcvttpd2uqq:     /**< IA-32/AMD64 AVX-512 OP_vcvttpd2uqq opcode. */
+        case /* 1187 */ OP_vcvttps2qq:      /**< IA-32/AMD64 AVX-512 OP_vcvttps2qq opcode. */
+        case /* 1188 */ OP_vcvttps2udq:     /**< IA-32/AMD64 AVX-512 OP_vcvttps2udq opcode. */
+        case /* 1189 */ OP_vcvttps2uqq:     /**< IA-32/AMD64 AVX-512 OP_vcvttps2uqq opcode. */
+        case /* 1190 */ OP_vcvttsd2usi:     /**< IA-32/AMD64 AVX-512 OP_vcvttsd2usi opcode. */
+        case /* 1191 */ OP_vcvttss2usi:     /**< IA-32/AMD64 AVX-512 OP_vcvttss2usi opcode. */
+        case /* 1192 */ OP_vcvtudq2pd:      /**< IA-32/AMD64 AVX-512 OP_vcvtudq2pd opcode. */
+        case /* 1193 */ OP_vcvtudq2ps:      /**< IA-32/AMD64 AVX-512 OP_vcvtudq2ps opcode. */
+        case /* 1194 */ OP_vcvtuqq2pd:      /**< IA-32/AMD64 AVX-512 OP_vcvtuqq2pd opcode. */
+        case /* 1195 */ OP_vcvtuqq2ps:      /**< IA-32/AMD64 AVX-512 OP_vcvtuqq2ps opcode. */
+        case /* 1196 */ OP_vcvtusi2sd:      /**< IA-32/AMD64 AVX-512 OP_vcvtusi2sd opcode. */
+        case /* 1197 */ OP_vcvtusi2ss:      /**< IA-32/AMD64 AVX-512 OP_vcvtusi2ss opcode. */
 
         case /* 1199 */ OP_vexp2pd:         /**< IA-32/AMD64 AVX-512 OP_vexp2pd opcode. */
         case /* 1200 */ OP_vexp2ps:         /**< IA-32/AMD64 AVX-512 OP_vexp2ps opcode. */
@@ -3822,48 +3927,6 @@ instr_is_branch(instr_t *instr) {
     }
 }
 
-DR_API
-bool
-instr_is_stack(instr_t *instr) {
-    switch (instr_get_opcode(instr)) {
-        case /*  18 */ OP_push:     /**< IA-32/AMD64 push opcode. */
-        case /*  19 */ OP_push_imm: /**< IA-32/AMD64 push_imm opcode. */
-        case /*  20 */ OP_pop:      /**< IA-32/AMD64 pop opcode. */
-        case /*  21 */ OP_pusha:    /**< IA-32/AMD64 pusha opcode. */
-        case /*  22 */ OP_popa:     /**< IA-32/AMD64 popa opcode. */
-
-        case /*  66 */ OP_pushf: /**< IA-32/AMD64 pushf opcode. */
-        case /*  67 */ OP_popf:  /**< IA-32/AMD64 popf opcode. */
-        case /*  74 */ OP_enter: /**< IA-32/AMD64 enter opcode. */
-        case /*  75 */ OP_leave: /**< IA-32/AMD64 leave opcode. */
-
-        case /* 191 */ OP_lss:        /**< IA-32/AMD64 lss opcode. */
-
-        // TODO:
-        case /* 436 */ OP_fld1:     /**< IA-32/AMD64 fld1 opcode. */
-        case /* 437 */ OP_fldl2t:   /**< IA-32/AMD64 fldl2t opcode. */
-        case /* 438 */ OP_fldl2e:   /**< IA-32/AMD64 fldl2e opcode. */
-        case /* 439 */ OP_fldpi:    /**< IA-32/AMD64 fldpi opcode. */
-        case /* 440 */ OP_fldlg2:   /**< IA-32/AMD64 fldlg2 opcode. */
-        case /* 441 */ OP_fldln2:   /**< IA-32/AMD64 fldln2 opcode. */
-        case /* 442 */ OP_fldz:     /**< IA-32/AMD64 fldz opcode. */
-        case /* 449 */ OP_fdecstp:  /**< IA-32/AMD64 fdecstp opcode. */
-        case /* 450 */ OP_fincstp:  /**< IA-32/AMD64 fincstp opcode. */
-        case /* 474 */ OP_fucomp:   /**< IA-32/AMD64 fucomp opcode. */
-        case /* 475 */ OP_faddp:    /**< IA-32/AMD64 faddp opcode. */
-        case /* 476 */ OP_fmulp:    /**< IA-32/AMD64 fmulp opcode. */
-        case /* 477 */ OP_fcompp:   /**< IA-32/AMD64 fcompp opcode. */
-        case /* 478 */ OP_fsubrp:   /**< IA-32/AMD64 fsubrp opcode. */
-        case /* 479 */ OP_fsubp:    /**< IA-32/AMD64 fsubp opcode. */
-        case /* 480 */ OP_fdivrp:   /**< IA-32/AMD64 fdivrp opcode. */
-        case /* 481 */ OP_fdivp:    /**< IA-32/AMD64 fdivp opcode. */
-        case /* 482 */ OP_fucomip:  /**< IA-32/AMD64 fucomip opcode. */
-        case /* 483 */ OP_fcomip:   /**< IA-32/AMD64 fcomip opcode. */ return true;
-
-        default: return false;
-    }
-}
-
 /*
  * UNCLASSIFIED INSTRUCTIONS
  */
@@ -3939,35 +4002,7 @@ instr_is_stack(instr_t *instr) {
 //
 // /* 281 */ OP_ldmxcsr,     /**< IA-32/AMD64 ldmxcsr opcode. */
 // /* 282 */ OP_stmxcsr,     /**< IA-32/AMD64 stmxcsr opcode. */
-//
-// // TODO: MOV/FLOATING POINT/INTEGER??
-// /* 307 */ OP_cvtpi2ps,  /**< IA-32/AMD64 cvtpi2ps opcode. */
-// /* 308 */ OP_cvtsi2ss,  /**< IA-32/AMD64 cvtsi2ss opcode. */
-// /* 309 */ OP_cvtpi2pd,  /**< IA-32/AMD64 cvtpi2pd opcode. */
-// /* 310 */ OP_cvtsi2sd,  /**< IA-32/AMD64 cvtsi2sd opcode. */
-// /* 311 */ OP_cvttps2pi, /**< IA-32/AMD64 cvttps2pi opcode. */
-// /* 312 */ OP_cvttss2si, /**< IA-32/AMD64 cvttss2si opcode. */
-// /* 313 */ OP_cvttpd2pi, /**< IA-32/AMD64 cvttpd2pi opcode. */
-// /* 314 */ OP_cvttsd2si, /**< IA-32/AMD64 cvttsd2si opcode. */
-// /* 315 */ OP_cvtps2pi,  /**< IA-32/AMD64 cvtps2pi opcode. */
-// /* 316 */ OP_cvtss2si,  /**< IA-32/AMD64 cvtss2si opcode. */
-// /* 317 */ OP_cvtpd2pi,  /**< IA-32/AMD64 cvtpd2pi opcode. */
-// /* 318 */ OP_cvtsd2si,  /**< IA-32/AMD64 cvtsd2si opcode. */
-//
-// // TODO: MOV/FLOATING POINT/INTEGER??
-// /* 349 */ OP_cvtps2pd,  /**< IA-32/AMD64 cvtps2pd opcode. */
-// /* 350 */ OP_cvtss2sd,  /**< IA-32/AMD64 cvtss2sd opcode. */
-// /* 351 */ OP_cvtpd2ps,  /**< IA-32/AMD64 cvtpd2ps opcode. */
-// /* 352 */ OP_cvtsd2ss,  /**< IA-32/AMD64 cvtsd2ss opcode. */
-// /* 353 */ OP_cvtdq2ps,  /**< IA-32/AMD64 cvtdq2ps opcode. */
-// /* 354 */ OP_cvttps2dq, /**< IA-32/AMD64 cvttps2dq opcode. */
-// /* 355 */ OP_cvtps2dq,  /**< IA-32/AMD64 cvtps2dq opcode. */
-//
-// // TODO: MOV/FLOATING POINT/INTEGER??
-// /* 378 */ OP_cvtdq2pd,  /**< IA-32/AMD64 cvtdq2pd opcode. */
-// /* 379 */ OP_cvttpd2dq, /**< IA-32/AMD64 cvttpd2dq opcode. */
-// /* 380 */ OP_cvtpd2dq,  /**< IA-32/AMD64 cvtpd2dq opcode. */
-//
+
 // /* 381 */ OP_nop,       /**< IA-32/AMD64 nop opcode. */
 // /* 382 */ OP_pause,     /**< IA-32/AMD64 pause opcode. */
 
@@ -4071,31 +4106,6 @@ instr_is_stack(instr_t *instr) {
 // /* 634 */ OP_xrstor32,   /**< IA-32/AMD64 xrstor opcode. */
 // /* 635 */ OP_xsaveopt32, /**< IA-32/AMD64 xsaveopt opcode. */
 
-// /* AVX */
-// TODO: MOV/FLOATING POINT/INTEGER??
-// case /* 653 */ OP_vcvtsi2ss:        /**< IA-32/AMD64 vcvtsi2ss opcode. */
-// case /* 654 */ OP_vcvtsi2sd:        /**< IA-32/AMD64 vcvtsi2sd opcode. */
-//
-// TODO: MOV/FLOATING POINT/INTEGER??
-// case /* 657 */ OP_vcvttss2si:       /**< IA-32/AMD64 vcvttss2si opcode. */
-// case /* 658 */ OP_vcvttsd2si:       /**< IA-32/AMD64 vcvttsd2si opcode. */
-// case /* 659 */ OP_vcvtss2si:        /**< IA-32/AMD64 vcvtss2si opcode. */
-// case /* 660 */ OP_vcvtsd2si:        /**< IA-32/AMD64 vcvtsd2si opcode. */
-//
-// // TODO: MOV/FLOATING POINT/INTEGER??
-// /* 691 */ OP_vcvtps2pd,        /**< IA-32/AMD64 vcvtps2pd opcode. */
-// /* 692 */ OP_vcvtss2sd,        /**< IA-32/AMD64 vcvtss2sd opcode. */
-// /* 693 */ OP_vcvtpd2ps,        /**< IA-32/AMD64 vcvtpd2ps opcode. */
-// /* 694 */ OP_vcvtsd2ss,        /**< IA-32/AMD64 vcvtsd2ss opcode. */
-// /* 695 */ OP_vcvtdq2ps,        /**< IA-32/AMD64 vcvtdq2ps opcode. */
-// /* 696 */ OP_vcvttps2dq,       /**< IA-32/AMD64 vcvttps2dq opcode. */
-// /* 697 */ OP_vcvtps2dq,        /**< IA-32/AMD64 vcvtps2dq opcode. */
-//
-// // TODO: MOV/FLOATING POINT/INTEGER??
-// /* 764 */ OP_vcvtdq2pd,        /**< IA-32/AMD64 vcvtdq2pd opcode. */
-// /* 765 */ OP_vcvttpd2dq,       /**< IA-32/AMD64 vcvttpd2dq opcode. */
-// /* 766 */ OP_vcvtpd2dq,        /**< IA-32/AMD64 vcvtpd2dq opcode. */
-//
 // /* 848 */ OP_vaesimc,          /**< IA-32/AMD64 vaesimc opcode. */
 // /* 849 */ OP_vaesenc,          /**< IA-32/AMD64 vaesenc opcode. */
 // /* 850 */ OP_vaesenclast,      /**< IA-32/AMD64 vaesenclast opcode. */
@@ -4109,10 +4119,6 @@ instr_is_stack(instr_t *instr) {
 // /* 873 */ OP_vpclmulqdq,       /**< IA-32/AMD64 vpclmulqdq opcode. */
 //
 // /* 874 */ OP_vaeskeygenassist, /**< IA-32/AMD64 vaeskeygenassist opcode. */
-//
-// // TODO: MOV/FLOATING POINT/INTEGER??
-// /* 891 */ OP_vcvtph2ps, /**< IA-32/AMD64 vcvtph2ps opcode. */
-// /* 892 */ OP_vcvtps2ph, /**< IA-32/AMD64 vcvtps2ph opcode. */
 //
 // /* 955 */ OP_fxsave64,   /**< IA-32/AMD64 fxsave64 opcode. */
 // /* 956 */ OP_fxrstor64,  /**< IA-32/AMD64 fxrstor64 opcode. */
@@ -4152,33 +4158,6 @@ instr_is_stack(instr_t *instr) {
 // /* added in Intel Skylake */
 // /* 1103 */ OP_xsavec32, /**< IA-32/AMD64 xsavec opcode. */
 // /* 1104 */ OP_xsavec64, /**< IA-32/AMD64 xsavec64 opcode. */
-
-// /* Intel AVX-512 EVEX */
-// // TODO: MOV/FLOATING POINT/INTEGER??
-// /* 1174 */ OP_vcvtpd2qq,       /**< IA-32/AMD64 AVX-512 OP_vcvtpd2qq opcode. */
-// /* 1175 */ OP_vcvtpd2udq,      /**< IA-32/AMD64 AVX-512 OP_vcvtpd2udq opcode. */
-// /* 1176 */ OP_vcvtpd2uqq,      /**< IA-32/AMD64 AVX-512 OP_vcvtpd2uqq opcode. */
-// /* 1177 */ OP_vcvtps2qq,       /**< IA-32/AMD64 AVX-512 OP_vcvtps2qq opcode. */
-// /* 1178 */ OP_vcvtps2udq,      /**< IA-32/AMD64 AVX-512 OP_vcvtps2udq opcode. */
-// /* 1179 */ OP_vcvtps2uqq,      /**< IA-32/AMD64 AVX-512 OP_vcvtps2uqq opcode. */
-// /* 1180 */ OP_vcvtqq2pd,       /**< IA-32/AMD64 AVX-512 OP_vcvtqq2pd opcode. */
-// /* 1181 */ OP_vcvtqq2ps,       /**< IA-32/AMD64 AVX-512 OP_vcvtqq2ps opcode. */
-// /* 1182 */ OP_vcvtsd2usi,      /**< IA-32/AMD64 AVX-512 OP_vcvtsd2usi opcode. */
-// /* 1183 */ OP_vcvtss2usi,      /**< IA-32/AMD64 AVX-512 OP_vcvtss2usi opcode. */
-// /* 1184 */ OP_vcvttpd2qq,      /**< IA-32/AMD64 AVX-512 OP_vcvttpd2qq opcode. */
-// /* 1185 */ OP_vcvttpd2udq,     /**< IA-32/AMD64 AVX-512 OP_vcvttpd2udq opcode. */
-// /* 1186 */ OP_vcvttpd2uqq,     /**< IA-32/AMD64 AVX-512 OP_vcvttpd2uqq opcode. */
-// /* 1187 */ OP_vcvttps2qq,      /**< IA-32/AMD64 AVX-512 OP_vcvttps2qq opcode. */
-// /* 1188 */ OP_vcvttps2udq,     /**< IA-32/AMD64 AVX-512 OP_vcvttps2udq opcode. */
-// /* 1189 */ OP_vcvttps2uqq,     /**< IA-32/AMD64 AVX-512 OP_vcvttps2uqq opcode. */
-// /* 1190 */ OP_vcvttsd2usi,     /**< IA-32/AMD64 AVX-512 OP_vcvttsd2usi opcode. */
-// /* 1191 */ OP_vcvttss2usi,     /**< IA-32/AMD64 AVX-512 OP_vcvttss2usi opcode. */
-// /* 1192 */ OP_vcvtudq2pd,      /**< IA-32/AMD64 AVX-512 OP_vcvtudq2pd opcode. */
-// /* 1193 */ OP_vcvtudq2ps,      /**< IA-32/AMD64 AVX-512 OP_vcvtudq2ps opcode. */
-// /* 1194 */ OP_vcvtuqq2pd,      /**< IA-32/AMD64 AVX-512 OP_vcvtuqq2pd opcode. */
-// /* 1195 */ OP_vcvtuqq2ps,      /**< IA-32/AMD64 AVX-512 OP_vcvtuqq2ps opcode. */
-// /* 1196 */ OP_vcvtusi2sd,      /**< IA-32/AMD64 AVX-512 OP_vcvtusi2sd opcode. */
-// /* 1197 */ OP_vcvtusi2ss,      /**< IA-32/AMD64 AVX-512 OP_vcvtusi2ss opcode. */
 
 // /* Intel AVX-512 EVEX */
 // /* 1211 */ OP_vfixupimmpd,     /**< IA-32/AMD64 AVX-512 OP_vfixupimmpd opcode. */

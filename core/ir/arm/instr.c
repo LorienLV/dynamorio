@@ -992,6 +992,11 @@ instr_is_ldst(instr_t *instr) {
         case /* 127 */ OP_pkhbt:          /**< ARM pkhbt opcode. */
         case /* 128 */ OP_pkhtb:          /**< ARM pkhtb opcode. */
 
+        case /* 224 */ OP_srs:            /**< ARM srs opcode. */
+        case /* 225 */ OP_srsda:          /**< ARM srsda opcode. */
+        case /* 226 */ OP_srsdb:          /**< ARM srsdb opcode. */
+        case /* 227 */ OP_srsib:          /**< ARM srsib opcode. */ 
+
         // TODO: OTHERS?
         case /* 233 */ OP_stc:            /**< ARM stc opcode. */
         case /* 234 */ OP_stc2:           /**< ARM stc2 opcode. */
@@ -1901,19 +1906,6 @@ instr_is_branch(instr_t *instr) {
 
         case /* 275 */ OP_tbb,            /**< ARM tbb opcode. */
         case /* 276 */ OP_tbh,            /**< ARM tbh opcode. */
-    }
-}
-
-DR_API
-bool
-instr_is_stack(instr_t *instr) {
-    switch (instr_get_opcode(instr)) {
-        case /* 224 */ OP_srs,            /**< ARM srs opcode. */
-        case /* 225 */ OP_srsda,          /**< ARM srsda opcode. */
-        case /* 226 */ OP_srsdb,          /**< ARM srsdb opcode. */
-        case /* 227 */ OP_srsib,          /**< ARM srsib opcode. */ return true;
-
-        default: return false;
     }
 }
 

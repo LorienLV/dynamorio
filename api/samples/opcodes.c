@@ -73,6 +73,28 @@ enum {
     NUM_ISA_MODE,
 };
 
+/* These are used to define regions of interest. In practice they correspond to
+ * unnalocated hint instructions that are treated as NOPs. */
+#ifdef X86
+    #define __START_TRACE_INSTR "\x66\x0f\x1f\x04\x25\x24\x00\x00\x00"
+    #define __STOP_TRACE_INSTR "\x66\x0f\x1f\x04\x25\x42\x00\x00\x00"
+    // #define __START_TRACE() { asm volatile ("nopw 0x24"); }
+    // #define  __STOP_TRACE() { asm volatile ("nopw 0x42"); }
+#elif defined(ARM) || defined(AARCH64)
+    #define __START_TRACE_INSTR "\x5f\x25\x03\xd5"
+    #define __STOP_TRACE_INSTR "\x7f\x25\x03\xd5"
+    // #define __START_TRACE() { asm volatile ("hint 0x2a"); }
+    // #define __STOP_TRACE() { asm volatile ("hint 0x2b"); }
+#else
+    #error invalid target
+#endif
+
+#define __START_TRACE_INSTR_SIZE (sizeof(__START_TRACE_INSTR)-1)
+#define __STOP_TRACE_INSTR_SIZE (sizeof( __STOP_TRACE_INSTR)-1)
+
+// Count inside the region of interest. Start paused by default.
+static bool count_enabled = false;
+
 typedef enum {
     OP_TYPE_OTHER,
 
@@ -92,7 +114,6 @@ typedef enum {
     OP_TYPE_SCALAR_INTEGER,
 
     OP_TYPE_BRANCH,
-    OP_TYPE_STACK,
 
     NUM_OP_TYPES
 } op_type_t;
@@ -116,7 +137,6 @@ static const char *op_type_names[NUM_OP_TYPES] = {
     "SCALAR_INTEGER",
 
     "BRANCH",
-    "STACK",
 };
 
 static uint64 total_bytes_read;
@@ -159,32 +179,26 @@ static void update_op_type_count(void *drcontext, instrlist_t *bb, instr_t *inst
 
     // x86 can read and write memory in the same instruction.
     if (num_reads_mem > 0 || num_writes_mem > 0) {
-        if (instr_is_stack(ins)) {
-            increment_counter(OP_TYPE_STACK, num_reads_mem + num_reads_mem);
-        }
         // mov/integer/float
+        if (is_simd) {
+            // simd load or simd instruction that reads memory.
+            if (num_reads_mem > 0) {
+                increment_counter(OP_TYPE_SIMD_LOAD, num_reads_mem);
+            }
+            // simd store or simd instruction that reads memory.
+            if (num_writes_mem > 0) {
+                increment_counter(OP_TYPE_SIMD_STORE, num_writes_mem);
+            }
+        }
         else {
-            if (is_simd) {
-                // simd load or simd instruction that reads memory.
-                if (num_reads_mem > 0) {
-                    increment_counter(OP_TYPE_SIMD_LOAD, num_reads_mem);
-                }
-                // simd store or simd instruction that reads memory.
-                if (num_writes_mem > 0) {
-                    increment_counter(OP_TYPE_SIMD_STORE, num_writes_mem);
-                }
+            // scalar load or scalar instruction that writes memory.
+            if (num_reads_mem > 0) {
+                increment_counter(OP_TYPE_SCALAR_LOAD, num_reads_mem);
             }
-            else {
-                // scalar load or scalar instruction that writes memory.
-                if (num_reads_mem > 0) {
-                    increment_counter(OP_TYPE_SCALAR_LOAD, num_reads_mem);
-                }
-                // scalar store or scalar instruction that writes memory.
-                if (num_writes_mem > 0) {
-                    increment_counter(OP_TYPE_SCALAR_STORE, num_writes_mem);
-                }
+            // scalar store or scalar instruction that writes memory.
+            if (num_writes_mem > 0) {
+                increment_counter(OP_TYPE_SCALAR_STORE, num_writes_mem);
             }
-            // else { Not sure if this is possible. SIMD else if added just in case...
         }
     }
     else if (instr_is_ldst(ins)) {
@@ -319,8 +333,6 @@ event_exit(void)
         for (i = 0; i <= OP_LAST; i++) indices[i] = i;
         qsort(indices, NUM_COUNT, sizeof(indices[0]), compare_counts);
 
-        if (count[cur_isa][indices[OP_LAST]] == 0) continue;
-
         printf("Top %d opcode execution counts in %s mode:\n",
             NUM_COUNT_SHOW, get_isa_mode_name(cur_isa));
         for (i = OP_LAST; i >= OP_LAST - 1 - NUM_COUNT_SHOW; i--) {
@@ -396,6 +408,26 @@ event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *inst
          * overhead.
          */
         for (ins = instrlist_first_app(bb); ins != NULL; ins = instr_get_next_app(ins)) {
+            byte *const ins_raw = instr_get_raw_bits(ins);
+            int const ins_size = instr_length(drcontext, ins);
+
+            if (ins_size == __START_TRACE_INSTR_SIZE &&
+                memcmp(__START_TRACE_INSTR, ins_raw, __START_TRACE_INSTR_SIZE) == 0) { 
+                count_enabled = true; 
+                fprintf(stderr, "Client opcodes: Start counting instructions\n");
+                continue; 
+            }
+            else if (ins_size == __STOP_TRACE_INSTR_SIZE && 
+                     memcmp( __STOP_TRACE_INSTR, ins_raw,  __STOP_TRACE_INSTR_SIZE) == 0) { 
+                count_enabled = false;
+                fprintf(stderr, "Client opcodes: Stop counting instructions\n");
+                continue;
+            }
+
+            if (!count_enabled) {
+                continue;
+            }
+
             /* We insert all increments sequentially up front so that drx can
              * optimize the spills and restores.
              */

@@ -1173,12 +1173,6 @@ bool instr_is_branch(instr_t *instr);
 
 DR_API
 /**
- * Returns true iff \p instr is an stack instruction.
- */
-bool instr_is_stack(instr_t *instr);
-
-DR_API
-/**
  * Returns true iff \p instr is a simd instruction.
  */
 bool instr_is_simd(instr_t *instr);

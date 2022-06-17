@@ -1039,15 +1039,6 @@ instr_is_branch(instr_t *instr)
     }
 }
 
-DR_API
-bool
-instr_is_stack(instr_t *instr)
-{
-    return false;
-    // switch (instr_get_opcode(instr)) {
-    // }
-}
-
 /*
  * Other
  */

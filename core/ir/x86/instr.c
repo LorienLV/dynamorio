@@ -3063,6 +3063,10 @@ instr_is_simd_integer(instr_t *instr) {
         case /* 592 */ OP_mpsadbw:    /**< IA-32/AMD64 mpsadbw opcode. */
 
         /* AVX */
+        case /* 718 */ OP_vpcmpgtb:         /**< IA-32/AMD64 vpcmpgtb opcode. */
+        case /* 719 */ OP_vpcmpgtw:         /**< IA-32/AMD64 vpcmpgtw opcode. */
+        case /* 720 */ OP_vpcmpgtd:         /**< IA-32/AMD64 vpcmpgtd opcode. */
+
         case /* 732 */ OP_vpcmpeqb:         /**< IA-32/AMD64 vpcmpeqb opcode. */
         case /* 733 */ OP_vpcmpeqw:         /**< IA-32/AMD64 vpcmpeqw opcode. */
         case /* 734 */ OP_vpcmpeqd:         /**< IA-32/AMD64 vpcmpeqd opcode. */
@@ -3514,10 +3518,6 @@ instr_is_scalar_float(instr_t *instr) {
         case /* 711 */ OP_vmaxss:           /**< IA-32/AMD64 vmaxss opcode. */
         
         case /* 713 */ OP_vmaxsd:           /**< IA-32/AMD64 vmaxsd opcode. */
-
-        case /* 718 */ OP_vpcmpgtb:         /**< IA-32/AMD64 vpcmpgtb opcode. */
-        case /* 719 */ OP_vpcmpgtw:         /**< IA-32/AMD64 vpcmpgtw opcode. */
-        case /* 720 */ OP_vpcmpgtd:         /**< IA-32/AMD64 vpcmpgtd opcode. */
 
         case /* 737 */ OP_vcmpss:           /**< IA-32/AMD64 vcmpss opcode. */
 

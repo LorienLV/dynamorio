@@ -2458,22 +2458,11 @@ instr_is_scalar_mov(instr_t *instr) {
         case /* 460 */ OP_fcmove:   /**< IA-32/AMD64 fcmove opcode. */
         case /* 461 */ OP_fcmovbe:  /**< IA-32/AMD64 fcmovbe opcode. */
         case /* 462 */ OP_fcmovu:   /**< IA-32/AMD64 fcmovu opcode. */
-        case /* 463 */ OP_fucompp:  /**< IA-32/AMD64 fucompp opcode. */
+
         case /* 464 */ OP_fcmovnb:  /**< IA-32/AMD64 fcmovnb opcode. */
         case /* 465 */ OP_fcmovne:  /**< IA-32/AMD64 fcmovne opcode. */
         case /* 466 */ OP_fcmovnbe: /**< IA-32/AMD64 fcmovnbe opcode. */
         case /* 467 */ OP_fcmovnu:  /**< IA-32/AMD64 fcmovnu opcode. */
-
-        case /* 474 */ OP_fucomp:   /**< IA-32/AMD64 fucomp opcode. */
-        case /* 475 */ OP_faddp:    /**< IA-32/AMD64 faddp opcode. */
-        case /* 476 */ OP_fmulp:    /**< IA-32/AMD64 fmulp opcode. */
-        case /* 477 */ OP_fcompp:   /**< IA-32/AMD64 fcompp opcode. */
-        case /* 478 */ OP_fsubrp:   /**< IA-32/AMD64 fsubrp opcode. */
-        case /* 479 */ OP_fsubp:    /**< IA-32/AMD64 fsubp opcode. */
-        case /* 480 */ OP_fdivrp:   /**< IA-32/AMD64 fdivrp opcode. */
-        case /* 481 */ OP_fdivp:    /**< IA-32/AMD64 fdivp opcode. */
-        case /* 482 */ OP_fucomip:  /**< IA-32/AMD64 fucomip opcode. */
-        case /* 483 */ OP_fcomip:   /**< IA-32/AMD64 fcomip opcode. */ 
 
         /* x64 */
         case /* 597 */ OP_movsxd: /**< IA-32/AMD64 movsxd opcode. */

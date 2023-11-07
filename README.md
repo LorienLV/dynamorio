@@ -1,4 +1,43 @@
-# DynamoRIO
+# DynamoRIO - Categorized Instruction Mix
+
+This repository contains a modified version of the DynamoRIO Opcode mix tool, designed for extracting a categorized instruction mix of an application. **This tool is no longer actively maintained and is considered deprecated.**
+
+## Usage
+
+`$DYNAMORIO_BUILD/bin64/drrun -c $DYNAMORIO_BUILD/api/bin/libopcodes.so -- YOUR_APPLICATION`
+
+The below command line will produce an output similar to this:
+
+```
+Instruction mix (# of instructions per category):
+	OTHER: X
+	SIMD_LOAD: X
+	SCALAR_LOAD: X
+	SIMD_STORE: X
+	SCALAR_STORE: X
+	SIMD_REGISTER: X
+	SCALAR_REGISTER: X
+	SIMD_FLOAT: X
+	SCALAR_FLOAT: X
+	SIMD_INTEGER: X
+	SCALAR_INTEGER: X
+	BRANCH: X
+
+Total bytes read: X
+Total bytes written: X
+
+Memory Instructions (disambiguation)
+	Register  X
+	Mem.Read  X
+	Mem.Write X
+	Mem.R/W   X
+
+# Original output of the Opcode Mix tool.
+Top 100 opcode execution counts in 64-bit AMD64 mode:
+X : mov
+X : add
+...
+```
 
 ![DynamoRIO logo](http://www.burningcutlery.com/images/dynamorio/drlogo.png?)
 

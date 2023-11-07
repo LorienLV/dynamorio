@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-# **********************************************************
-# Copyright (c) 2021 Arm Limited    All rights reserved.
-# **********************************************************
+# ***********************************************************
+# Copyright (c) 2021-2023 Arm Limited    All rights reserved.
+# ***********************************************************
 
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -31,8 +31,8 @@
 # DAMAGE.
 
 """
-Script to order instructions in codec.txt
-Usage: python codecsort.py [--rewrite]
+Script to order instructions in codec_<version>.txt
+Usage: python codecsort.py [--rewrite|--global] codec_<version>.txt
 """
 
 import re
@@ -40,36 +40,40 @@ import sys
 import os.path
 
 
-DELIMITER = "# Instructions:"
-CODEC_FILE = os.path.join(os.path.dirname(__file__), "codec.txt")
+DELIMITER = "# Instruction definitions:"
 
 class CodecLine:
     """Container to keep line info together"""
-    def __init__(self, pattern, nzcv, enum, opcode, opndtypes):
+    def __init__(self, pattern, nzcv, enum, feat, opcode, opndtypes):
         self.enum = enum
+        self.feat = feat
         self.pattern = pattern
         self.nzcv = nzcv
         self.opcode = opcode
         self.opndtypes = opndtypes
 
-def read_instrs():
-    """Read the instr lines from the codec.txt file"""
+def read_instrs(codec_file):
+    """Read the instr lines from the codec_<version>.txt file"""
     seen_delimeter = False
     instrs = []
 
-    with open(CODEC_FILE, "r") as lines:
+    with open(codec_file, "r") as lines:
         for line in (l.strip() for l in lines if l.strip()):
-            if not seen_delimeter:
-                if line == DELIMITER:
-                    seen_delimeter = True
-                continue
-            if line.strip().startswith("#"):
-                continue
-            line = line.split(None, 4)
-            if not line[2].isnumeric():
-                # missing an enum entry, put a none in
-                line = [line[0], line[1], None, line[2], " ".join(line[3:])]
-            instrs.append(CodecLine(*line))
+            try:
+                if not seen_delimeter:
+                    if line == DELIMITER:
+                        seen_delimeter = True
+                    continue
+                if line.strip().startswith("#"):
+                    continue
+                line = line.split(None, 5)
+                if not line[2].isnumeric():
+                    # missing an enum entry, put a none in
+                    line = [line[0], line[1], None, line[2], line[3], " ".join(line[4:])]
+                instrs.append(CodecLine(*line))
+            except:
+                print("Error parsing line: {}".format(line), file=sys.stderr)
+                raise
 
     return instrs
 
@@ -87,6 +91,14 @@ def handle_enums(instrs):
         else:
             enums[i.opcode] = i.enum
 
+    reversed_enums = {}
+    for opcode, enum in enums.items():
+        reversed_enums.setdefault(enum, set()).add(opcode)
+    for enum, opcodes in reversed_enums.items():
+        assert len(opcodes) == 1, \
+            "Multiple opcodes for the same enum {}: {}".format(
+                enum, ','.join(opcodes))
+
     enums = {i.opcode: i.enum for i in instrs if i.enum}
     if enums:
         max_enum = max(int(i.enum) for i in instrs if i.enum)
@@ -101,61 +113,72 @@ def handle_enums(instrs):
 
 
 def main():
-    """Reorder the instr section of codec.txt, making sure to be a stable function"""
-    instrs = read_instrs()
-    instrs.sort(key=lambda line: line.opcode)
+    """Reorder the given codec_<version>.txt """
 
-    handle_enums(instrs)
+    if len(sys.argv) < 2:
+        print('Usage: codecsort.py [--rewrite|--global] <codec definitions files>')
+        sys.exit(1)
 
-    # Scan for some max lengths for formatting
-    instr_length = max(len(i.opcode) for i in instrs)
-    pre_colon = max(
-        len(i.opndtypes.split(":")[0].strip())
-        for i in instrs
-        if ":" in i.opndtypes
-        and len(i.opndtypes.split(":")[0].strip()) < 14)
-
-    contains_z =  re.compile(r'z[0-9]+')
-
-    v8_instrs = [i for i in instrs if not contains_z.match(i.opndtypes)]
-    sve_instrs = [i for i in instrs if contains_z.match(i.opndtypes)]
-
-    new_lines = {}
-
-    for name, instr_list in (["v8", v8_instrs], ["sve", sve_instrs]):
-        new_lines[name] = [
-            "{pattern}  {nzcv:<3} {enum:<4} {opcode_pad}{opcode}  {opand_pad}{opand}".format(
-                enum=i.enum,
-                pattern=i.pattern,
-                nzcv=i.nzcv,
-                opcode_pad=(instr_length - len(i.opcode)) * " ",
-                opcode=i.opcode,
-                opand_pad=(pre_colon - len(i.opndtypes.split(":")[0].strip())) * " ",
-                opand="{} : {}".format(
-                    i.opndtypes.split(":")[0].strip(),
-                    i.opndtypes.split(":")[1].strip()) if ":" in i.opndtypes
-                else i.opndtypes
-                ).strip() for i in instr_list]
-
-    header = []
-    with open(CODEC_FILE, "r") as lines:
-        for line in lines:
-            header.append(line.strip("\n"))
-            if line.strip() == DELIMITER:
-                header.append("")
-                break
-
-    def output(dest):
-        dest("\n".join(header))
-        dest("\n".join(new_lines["v8"]))
-        dest("\n# SVE instructions")
-        dest("\n".join(new_lines["sve"]))
-
-    if len(sys.argv) > 1 and sys.argv[1] == "--rewrite":
-        with open(CODEC_FILE, "w") as codec_file:
-            output(lambda l: codec_file.write(l+"\n"))
+    is_rewrite = False
+    if len(sys.argv) >= 3 and sys.argv[1] == "--rewrite":
+        is_rewrite = True
+        codec_files = sys.argv[2:]
     else:
-        output(lambda l: sys.stdout.write(l + "\n"))
+        codec_files = sys.argv[1:]
+
+    instr_orig = {codec_file: read_instrs(codec_file) for codec_file in codec_files}
+    file_instrs = {codec_file: sorted(instrs, key=lambda line: line.opcode) for codec_file, instrs in instr_orig.items()}
+
+    handle_enums([instr for finstrs in file_instrs.values() for instr in finstrs])
+
+    for codec_file, instrs in file_instrs.items():
+        new_lines = []
+
+        if instrs:
+            # Scan for some max lengths for formatting
+            instr_length = max(len(i.opcode) for i in instrs)
+            pre_colon = max(
+                len(i.opndtypes.split(":")[0].strip())
+                for i in instrs
+                if ":" in i.opndtypes
+                and len(i.opndtypes.split(":")[0].strip()) < 14)
+
+            for instr in instrs:
+                new_lines.append(
+                    "{pattern}  {nzcv:<3} {enum:<4} {feat:<4} {opcode_pad}{opcode}  {opand_pad}{opand}".format(
+                        enum=instr.enum,
+                        feat=instr.feat,
+                        pattern=instr.pattern,
+                        nzcv=instr.nzcv,
+                        opcode_pad=(instr_length - len(instr.opcode)) * " ",
+                        opcode=instr.opcode,
+                        opand_pad=(pre_colon - len(instr.opndtypes.split(":")[0].strip())) * " ",
+                        opand="{} : {}".format(
+                            instr.opndtypes.split(":")[0].strip(),
+                            instr.opndtypes.split(":")[1].strip()) if ":" in instr.opndtypes
+                        else instr.opndtypes
+                        ).strip())
+
+        header = []
+        with open(codec_file, "r") as lines:
+            for line in lines:
+                header.append(line.strip("\n"))
+                if line.strip() == DELIMITER:
+                    header.append("")
+                    break
+
+        def output(dest):
+            dest("\n".join(header))
+            dest("\n".join(new_lines))
+
+        if is_rewrite:
+            with open(codec_file, "w") as codec_txt:
+                output(lambda l: codec_txt.write(l+"\n"))
+        else:
+            output(lambda l: sys.stdout.write(l + "\n"))
+
+            if instr_orig[codec_file] != file_instrs[codec_file]:
+                sys.exit(1)
 
 if __name__ == "__main__":
     main()

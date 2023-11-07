@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2010-2020 Google, Inc.    All rights reserved.
+# Copyright (c) 2010-2022 Google, Inc.    All rights reserved.
 # Copyright (c) 2009-2010 VMware, Inc.    All rights reserved.
 # **********************************************************
 
@@ -140,26 +140,25 @@ if (MSVC)
   set(CPP_KEEP_WHITESPACE "")
   set(CMAKE_CPP_FLAGS "/nologo")
 else ()
-  # "gcc -E" on a non-.c-extension file gives message:
-  #   "linker input file unused because linking not done"
-  # and doesn't produce any output, so we must use cpp for our .asm files.
-  # we assume it's in the same dir.
-  get_filename_component(compiler_path ${CMAKE_C_COMPILER} PATH)
-  # Allow user to set C pre-processor from environment variable
-  if (DEFINED ENV{CPP})
-    set(CMAKE_CPP $ENV{CPP})
-  else ()
-    find_program(CMAKE_CPP cpp HINTS "${compiler_path}" DOC "path to C preprocessor")
-    if (NOT CMAKE_CPP)
-      message(FATAL_ERROR "cpp is required to build")
-    endif (NOT CMAKE_CPP)
-  endif ()
-  mark_as_advanced(CMAKE_CPP)
-
   set(CPP_KEEP_COMMENTS -C)
   set(CPP_NO_LINENUM -P)
   set(CPP_KEEP_WHITESPACE -traditional-cpp)
-  set(CMAKE_CPP_FLAGS "")
+
+  # Allow user to set C pre-processor from environment variable
+  if (DEFINED ENV{CPP})
+    set(CMAKE_CPP $ENV{CPP})
+    set(CMAKE_CPP_FLAGS "")
+  else ()
+    # Cmake-discovered compiler on macOS does not include system
+    # directories by default.
+    if (APPLE)
+      find_program(CMAKE_CPP cc)
+    else ()
+      set(CMAKE_CPP ${CMAKE_C_COMPILER})
+    endif ()
+    set(CMAKE_CPP_FLAGS "-xc")
+  endif ()
+  mark_as_advanced(CMAKE_CPP)
 endif (MSVC)
 
 ##################################################
@@ -175,35 +174,43 @@ if (NOT "${CMAKE_GENERATOR}" MATCHES "Visual Studio")
   # CMake does not support assembly with VS generators
   # (http://public.kitware.com/Bug/view.php?id=11536)
   # so we have to add our own custom commands and targets
-  if (APPLE)
+  if (APPLE AND NOT AARCH64)
     # NASM support was added in 2.8.3.  It clears ASM_DIALECT for us.
     enable_language(ASM_NASM)
-  else (APPLE)
+  else (APPLE AND NOT AARCH64)
     enable_language(ASM)
-  endif (APPLE)
+  endif ()
 endif ()
 
 if (APPLE)
-  # XXX: we may be able to avoid some of this given CMake 2.8.3's NASM support.
-  find_program(NASM nasm DOC "path to nasm assembler")
-  if (NOT NASM)
-    message(FATAL_ERROR "nasm assembler not found: required to build")
-  endif (NOT NASM)
-  message(STATUS "Found nasm: ${NASM}")
-  execute_process(COMMAND ${NASM} -hf OUTPUT_VARIABLE nasm_result ERROR_QUIET)
-  if (X64)
-    # x64 support added between 0.98.40 and 2.10.07
-    if (NOT nasm_result MATCHES macho64)
-      message(FATAL_ERROR "nasm is too old: no 64-bit support")
+  if (AARCH64)
+    set(CMAKE_ASM_COMPILER "clang")
+    set(ASM_FLAGS "${ASM_FLAGS} -c")
+    if (DEFINED OLDEST_OSX_SUPPPORTED)
+      set(ASM_FLAGS "${ASM_FLAGS} -mmacosx-version-min=${OLDEST_OSX_SUPPPORTED}")
     endif ()
-    set(ASM_FLAGS "${ASM_FLAGS} -fmacho64")
-  else (X64)
-    if (nasm_result MATCHES macho32)
-      set(ASM_FLAGS "${ASM_FLAGS} -fmacho32")
-    else ()
-      set(ASM_FLAGS "${ASM_FLAGS} -fmacho")
-    endif ()
-  endif (X64)
+  else (AARCH64)
+    # XXX: we may be able to avoid some of this given CMake 2.8.3's NASM support.
+    find_program(NASM nasm DOC "path to nasm assembler")
+    if (NOT NASM)
+      message(FATAL_ERROR "nasm assembler not found: required to build")
+    endif (NOT NASM)
+    message(STATUS "Found nasm: ${NASM}")
+    execute_process(COMMAND ${NASM} -hf OUTPUT_VARIABLE nasm_result ERROR_QUIET)
+    if (X64)
+      # x64 support added between 0.98.40 and 2.10.07
+      if (NOT nasm_result MATCHES macho64)
+        message(FATAL_ERROR "nasm is too old: no 64-bit support")
+      endif ()
+      set(ASM_FLAGS "${ASM_FLAGS} -fmacho64")
+    else (X64)
+      if (nasm_result MATCHES macho32)
+        set(ASM_FLAGS "${ASM_FLAGS} -fmacho32")
+      else ()
+        set(ASM_FLAGS "${ASM_FLAGS} -fmacho")
+      endif ()
+    endif (X64)
+  endif (AARCH64)
   if (DEBUG)
     set(ASM_FLAGS "${ASM_FLAGS} -g")
   endif (DEBUG)
@@ -318,14 +325,14 @@ set(rule_defs "<DEFINES> -DCPP2ASM")
 # Don't use "--defsym" since we pass this to cpp.
 set(CMAKE_ASM_DEFINE_FLAG "-D")
 
-if (APPLE)
+if (APPLE AND NOT AARCH64)
   # Despite the docs, -o does not work: cpp prints to stdout.
   set(CMAKE_ASM_NASM_COMPILE_OBJECT
      "${CMAKE_CPP} ${CMAKE_CPP_FLAGS} ${rule_flags} ${rule_defs} -E <SOURCE> > <OBJECT>.s"
     "<CMAKE_COMMAND> -Dfile=<OBJECT>.s -P \"${cpp2asm_newline_script_path}\""
     "<NASM> ${ASM_FLAGS} -o <OBJECT> <OBJECT>.s"
     )
-elseif (UNIX)
+elseif (UNIX OR (APPLE AND AARCH64))
   set(CMAKE_ASM_COMPILE_OBJECT
     "${CMAKE_CPP} ${CMAKE_CPP_FLAGS} ${rule_flags} ${rule_defs} -E <SOURCE> -o <OBJECT>.s"
     "<CMAKE_COMMAND> -Dfile=<OBJECT>.s -P \"${cpp2asm_newline_script_path}\""

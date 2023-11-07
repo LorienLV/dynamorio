@@ -1,5 +1,5 @@
 /* ******************************************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2023 Google, Inc.  All rights reserved.
  * ******************************************************************************/
 
 /*
@@ -50,43 +50,29 @@ The source code is available:
 
 For the very latest changes since the last official release, you can download \ref page_weekly_builds.
 
-The [8.0.0 release](https://github.com/DynamoRIO/dynamorio/releases/tag/release_8.0.0-1):
+The [10.0.0 release](https://github.com/DynamoRIO/dynamorio/releases/tag/release_10.0.0):
 
-  - [DynamoRIO-Windows-8.0.0-1.zip](https://github.com/DynamoRIO/dynamorio/releases/download/release_8.0.0-1/DynamoRIO-Windows-8.0.0-1.zip)
+  - [DynamoRIO-Windows-10.0.0.zip](https://github.com/DynamoRIO/dynamorio/releases/download/release_10.0.0/DynamoRIO-Windows-10.0.0.zip)
 
-  - [DynamoRIO-Linux-8.0.0-1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_8.0.0-1/DynamoRIO-Linux-8.0.0-1.tar.gz)
+  - [DynamoRIO-Linux-10.0.0.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_10.0.0/DynamoRIO-Linux-10.0.0.tar.gz)
 
-  - [DynamoRIO-ARM-Linux-EABIHF-8.0.0-1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_8.0.0-1/DynamoRIO-ARM-Linux-EABIHF-8.0.0-1.tar.gz)
+  - [DynamoRIO-ARM-Linux-EABIHF-10.0.0.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_10.0.0/DynamoRIO-ARM-Linux-EABIHF-10.0.0.tar.gz)
 
-  - [DynamoRIO-ARM-Android-EABI-8.0.0-1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_8.0.0-1/DynamoRIO-ARM-Android-EABI-8.0.0-1.tar.gz)
+  - [DynamoRIO-ARM-Android-EABI-10.0.0.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_10.0.0/DynamoRIO-ARM-Android-EABI-10.0.0.tar.gz)
 
-  - [DynamoRIO-AArch64-Linux-8.0.0-1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_8.0.0-1/DynamoRIO-AArch64-Linux-8.0.0-1.tar.gz)
+  - [DynamoRIO-AArch64-Linux-10.0.0.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_10.0.0/DynamoRIO-AArch64-Linux-10.0.0.tar.gz)
 
-Please note that older releases than 8.0.0 do not support recent operating systems, in particular recent Windows versions from Windows 10 1809 onward.
+The prior [9.0.1 release](https://github.com/DynamoRIO/dynamorio/releases/tag/release_9.0.1):
 
-The prior [7.1.0 release](https://github.com/DynamoRIO/dynamorio/releases/tag/release_7.1.0):
+  - [DynamoRIO-Windows-9.0.1.zip](https://github.com/DynamoRIO/dynamorio/releases/download/release_9.0.1/DynamoRIO-Windows-9.0.1.zip)
 
-  - [DynamoRIO-Windows-7.1.0-1.zip](https://github.com/DynamoRIO/dynamorio/releases/download/release_7.1.0/DynamoRIO-Windows-7.1.0-1.zip)
+  - [DynamoRIO-Linux-9.0.1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_9.0.1/DynamoRIO-Linux-9.0.1.tar.gz)
 
-  - [DynamoRIO-Linux-7.1.0-1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_7.1.0/DynamoRIO-Linux-7.1.0-1.tar.gz)
+  - [DynamoRIO-ARM-Linux-EABIHF-9.0.1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_9.0.1/DynamoRIO-ARM-Linux-EABIHF-9.0.1.tar.gz)
 
-  - [DynamoRIO-ARM-Linux-EABIHF-7.1.0-1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_7.1.0/DynamoRIO-ARM-Linux-EABIHF-7.1.0-1.tar.gz)
+  - [DynamoRIO-ARM-Android-EABI-9.0.1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_9.0.1/DynamoRIO-ARM-Android-EABI-9.0.1.tar.gz)
 
-  - [DynamoRIO-ARM-Android-EABI-7.1.0-1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_7.1.0/DynamoRIO-ARM-Android-EABI-7.1.0-1.tar.gz)
-
-  - [DynamoRIO-AArch64-Linux-7.1.0-1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_7.1.0/DynamoRIO-AArch64-Linux-7.1.0-1.tar.gz)
-
-The prior [7.0.0 release](https://github.com/DynamoRIO/dynamorio/releases/tag/release_7_0_0_rc1):
-
-  - [DynamoRIO-Windows-7.0.0-RC1.zip](https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Windows-7.0.0-RC1.zip)
-
-  - [DynamoRIO-Linux-7.0.0-RC1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz)
-
-  - [DynamoRIO-ARM-Linux-EABIHF-7.0.0-RC1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-ARM-Linux-EABIHF-7.0.0-RC1.tar.gz)
-
-  - [DynamoRIO-ARM-Android-EABI-7.0.0-RC1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-ARM-Android-EABI-7.0.0-RC1.tar.gz)
-
-  - [DynamoRIO-AArch64-Linux-7.0.0-RC1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-AArch64-Linux-7.0.0-RC1.tar.gz)
+  - [DynamoRIO-AArch64-Linux-9.0.1.tar.gz](https://github.com/DynamoRIO/dynamorio/releases/download/release_9.0.1/DynamoRIO-AArch64-Linux-9.0.1.tar.gz)
 
 
 ***************************************************************************
@@ -115,11 +101,11 @@ Selected tutorials and talks:
 
   - [DynamoRIO tutorial at CGO Mar 2016 (PPSX)](https://github.com/DynamoRIO/dynamorio/releases/download/release_6_1_0/DynamoRIO-tutorial-mar2016.ppsx)
 
-  - [DynamoRIO tutorial at CGO Feb 2015 (PDF)](https://bintray.com/bruening/DynamoRIO/DynamoRIO-tutorial-pdf/view) ([DynamoRIO-tutorial-2015.pdf](https://bintray.com/artifact/download/bruening/DynamoRIO/DynamoRIO-tutorial-2015.pdf))
+  - [DynamoRIO tutorial at CGO Feb 2015 (PDF)](https://www.burningcutlery.com/derek/docs/DynamoRIO-tutorial-2015.pdf)
 
-  - [DynamoRIO talk: "Building Customized Dynamic Program Inspectors" (PDF)](https://bintray.com/bruening/DynamoRIO/DynamoRIO-talk-pdf/view) ([DynamoRIO-program-inspectors-aug2014.pdf](http://dl.bintray.com/bruening/DynamoRIO/DynamoRIO-program-inspectors-aug2014.pdf))
+  - [DynamoRIO talk: "Building Customized Dynamic Program Inspectors" (PDF)](https://www.burningcutlery.com/derek/docs/DynamoRIO-program-inspectors-aug2014.pdf)
 
-  - [DynamoRIO talk: "Building Customized Dynamic Program Inspectors" (PPSX)](https://bintray.com/bruening/DynamoRIO/DynamoRIO-talk-ppsx/view) ([DynamoRIO-program-inspectors-aug2014.ppsx](http://dl.bintray.com/bruening/DynamoRIO/DynamoRIO-program-inspectors-aug2014.ppsx))
+  - [DynamoRIO talk: "Building Customized Dynamic Program Inspectors" (PPSX)](https://www.burningcutlery.com/derek/docs/DynamoRIO-program-inspectors-aug2014.ppsx)
 
 
 ***************************************************************************

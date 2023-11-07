@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2014-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2014-2022 Google, Inc.  All rights reserved.
  * ********************************************************** */
 
 /*
@@ -40,7 +40,7 @@ START_FILE
 
 DECL_EXTERN(dynamorio_app_take_over_helper)
 #if defined(UNIX)
-DECL_EXTERN(master_signal_handler_C)
+DECL_EXTERN(main_signal_handler_C)
 DECL_EXTERN(dr_setjmp_sigmask)
 #endif
 DECL_EXTERN(relocate_dynamorio)
@@ -246,11 +246,11 @@ GLOBAL_LABEL(dynamorio_app_take_over:)
 
 /*
  * cleanup_and_terminate(dcontext_t *dcontext,     // 0*ARG_SZ+sp
- *                       int sysnum,               // 1*ARG_SZ+sp = syscall #
- *                       int sys_arg1/param_base,  // 2*ARG_SZ+sp = arg1 for syscall
- *                       int sys_arg2,             // 3*ARG_SZ+sp = arg2 for syscall
- *                       bool exitproc,            // 4*ARG_SZ+sp
- *                       (2 more args that are ignored: Mac-only))
+ *                   int sysnum,               // 1*ARG_SZ+sp = syscall #
+ *                   ptr_uint_t sys_arg1/param_base,  // 2*ARG_SZ+sp = arg1 for syscall
+ *                   ptr_uint_t sys_arg2,             // 3*ARG_SZ+sp = arg2 for syscall
+ *                   bool exitproc,            // 4*ARG_SZ+sp
+ *                   (2 more args that are ignored: Mac-only))
  *
  * See decl in arch_exports.h for description.
  */
@@ -545,17 +545,17 @@ GLOBAL_LABEL(dynamorio_sys_exit:)
 #ifndef HAVE_SIGALTSTACK
 # error NYI
 #endif
-        DECLARE_FUNC(master_signal_handler)
-GLOBAL_LABEL(master_signal_handler:)
+        DECLARE_FUNC(main_signal_handler)
+GLOBAL_LABEL(main_signal_handler:)
         mov      ARG4, sp /* pass as extra arg */
         /* i#2107: we repeat the mov to work around odd behavior on Android
          * where sometimes the kernel sends control to the 2nd instruction here.
          */
         mov      ARG4, sp /* pass as extra arg */
-        b        GLOBAL_REF(master_signal_handler_C)
-        /* master_signal_handler_C will do the ret */
+        b        GLOBAL_REF(main_signal_handler_C)
+        /* main_signal_handler_C will do the ret */
         bl       GLOBAL_REF(unexpected_return)
-        END_FUNC(master_signal_handler)
+        END_FUNC(main_signal_handler)
 
 #endif /* LINUX */
 

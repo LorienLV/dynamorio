@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2018-2020 Google, LLC  All rights reserved.
+ * Copyright (c) 2018-2023 Google, LLC  All rights reserved.
  * **********************************************************/
 
 /*
@@ -37,15 +37,19 @@
 #ifndef _CONFIG_READER_H_
 #define _CONFIG_READER_H_ 1
 
+#include <stdint.h>
+
 #include <fstream>
 #include <map>
 #include <string>
+#include <vector>
 
-#include "../common/options.h"
-#include "../simulator/cache.h"
-#include "../simulator/cache_simulator_create.h"
+#include "options.h"
+#include "cache.h"
+#include "cache_simulator_create.h"
 
-using namespace std;
+namespace dynamorio {
+namespace drmemtrace {
 
 // Cache configuration settings.
 struct cache_params_t {
@@ -115,5 +119,8 @@ private:
         return false;
     }
 };
+
+} // namespace drmemtrace
+} // namespace dynamorio
 
 #endif /* _CONFIG_READER_H_ */

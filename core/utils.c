@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2017 ARM Limited. All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
@@ -601,9 +601,6 @@ deadlock_avoidance_lock(mutex_t *lock, bool acquired, bool ownable)
                 bool both_client = (first_client && lock->rank == dr_client_mutex_rank);
                 if (dcontext->thread_owned_locks->last_lock->rank >= lock->rank &&
                     !first_client /*FIXME PR 198871: remove */ && !both_client) {
-                    /* like syslog don't synchronize options for dumpcore_mask */
-                    if (TEST(DUMPCORE_DEADLOCK, DYNAMO_OPTION(dumpcore_mask)))
-                        os_dump_core("rank order violation");
                     /* report rank order violation */
                     SYSLOG_INTERNAL_NO_OPTION_SYNCH(
                         SYSLOG_CRITICAL,
@@ -611,6 +608,9 @@ deadlock_avoidance_lock(mutex_t *lock, bool acquired, bool ownable)
                         dcontext->thread_owned_locks->last_lock->name,
                         d_r_get_thread_id());
                     dump_owned_locks(dcontext);
+                    /* like syslog don't synchronize options for dumpcore_mask */
+                    if (TEST(DUMPCORE_DEADLOCK, DYNAMO_OPTION(dumpcore_mask)))
+                        os_dump_core("rank order violation");
                 }
                 ASSERT((dcontext->thread_owned_locks->last_lock->rank < lock->rank ||
                         first_client /*FIXME PR 198871: remove */
@@ -866,7 +866,7 @@ d_r_mutex_lock_app(mutex_t *lock, priv_mcontext_t *mc)
                when the lock->lock_requests > 0 (which means that at least one thread is
                already blocked).  And of course, we also break if it is LOCK_FREE_STATE.
             */
-            if (lock->lock_requests != LOCK_SET_STATE) {
+            if (atomic_aligned_read_int(&lock->lock_requests) != LOCK_SET_STATE) {
 #ifdef DEADLOCK_AVOIDANCE
                 lock->count_times_spin_only++;
 #endif
@@ -988,6 +988,9 @@ d_r_mutex_mark_as_app(mutex_t *lock)
 static inline void
 own_recursive_lock(recursive_lock_t *lock)
 {
+#ifdef DEADLOCK_AVOIDANCE
+    ASSERT(!mutex_ownable(&lock->lock) || OWN_MUTEX(&lock->lock));
+#endif
     ASSERT(lock->owner == INVALID_THREAD_ID);
     ASSERT(lock->count == 0);
     lock->owner = d_r_get_thread_id();
@@ -1002,8 +1005,7 @@ acquire_recursive_app_lock(recursive_lock_t *lock, priv_mcontext_t *mc)
        busy try_lock
     */
 
-    /* ASSUMPTION: reading owner field is atomic */
-    if (lock->owner == d_r_get_thread_id()) {
+    if (ATOMIC_READ_THREAD_ID(&lock->owner) == d_r_get_thread_id()) {
         lock->count++;
     } else {
         d_r_mutex_lock_app(&lock->lock, mc);
@@ -1021,8 +1023,7 @@ acquire_recursive_lock(recursive_lock_t *lock)
 bool
 try_recursive_lock(recursive_lock_t *lock)
 {
-    /* ASSUMPTION: reading owner field is atomic */
-    if (lock->owner == d_r_get_thread_id()) {
+    if (ATOMIC_READ_THREAD_ID(&lock->owner) == d_r_get_thread_id()) {
         lock->count++;
     } else {
         if (!d_r_mutex_trylock(&lock->lock))
@@ -1035,6 +1036,9 @@ try_recursive_lock(recursive_lock_t *lock)
 void
 release_recursive_lock(recursive_lock_t *lock)
 {
+#ifdef DEADLOCK_AVOIDANCE
+    ASSERT(!mutex_ownable(&lock->lock) || OWN_MUTEX(&lock->lock));
+#endif
     ASSERT(lock->owner == d_r_get_thread_id());
     ASSERT(lock->count > 0);
     lock->count--;
@@ -1047,8 +1051,7 @@ release_recursive_lock(recursive_lock_t *lock)
 bool
 self_owns_recursive_lock(recursive_lock_t *lock)
 {
-    /* ASSUMPTION: reading owner field is atomic */
-    return (lock->owner == d_r_get_thread_id());
+    return (ATOMIC_READ_THREAD_ID(&lock->owner) == d_r_get_thread_id());
 }
 
 /* Read write locks */
@@ -1121,6 +1124,7 @@ d_r_read_lock(read_write_lock_t *rw)
                  * FIXME: we could also reorganize this check so that it is done only once
                  * instead of in the loop body but it doesn't seem wortwhile
                  */
+                /* We have the lock so we do not need a load-acquire. */
                 if (rw->writer == d_r_get_thread_id()) {
                     /* we would share the code below but we do not want
                      * the deadlock avoidance to consider this an acquire
@@ -1155,6 +1159,7 @@ d_r_read_lock(read_write_lock_t *rw)
              * Update: linux d_r_get_thread_id() now calls get_tls_thread_id()
              * and avoids the syscall (xref PR 473640).
              */
+            /* We have the lock so we do not need a load-acquire. */
             if (rw->writer == d_r_get_thread_id()) {
                 /* we would share the code below but we do not want
                  * the deadlock avoidance to consider this an acquire
@@ -1224,6 +1229,7 @@ d_r_write_lock(read_write_lock_t *rw)
      */
     if (INTERNAL_OPTION(spin_yield_rwlock)) {
         d_r_mutex_lock(&rw->lock);
+        /* We have the lock so we do not need a load-acquire. */
         while (rw->num_readers > 0) {
             /* contended write */
             DEADLOCK_AVOIDANCE_LOCK(&rw->lock, false, LOCK_NOT_OWNABLE);
@@ -1251,6 +1257,7 @@ d_r_write_trylock(read_write_lock_t *rw)
 {
     if (d_r_mutex_trylock(&rw->lock)) {
         ASSERT_NOT_TESTED();
+        /* We have the lock so we do not need a load-acquire. */
         if (rw->num_readers == 0) {
             rw->writer = d_r_get_thread_id();
             return true;
@@ -1260,7 +1267,7 @@ d_r_write_trylock(read_write_lock_t *rw)
                that one may already be waiting on the broadcast event */
             d_r_mutex_unlock(&rw->lock);
             /* check whether any reader is currently waiting */
-            if (rw->num_pending_readers > 0) {
+            if (atomic_aligned_read_int(&rw->num_pending_readers) > 0) {
                 /* after we've released the write lock, pending
                  * readers will no longer wait
                  */
@@ -1291,6 +1298,7 @@ d_r_read_unlock(read_write_lock_t *rw)
         /* if the writer is waiting it definitely needs to hold the mutex */
         if (mutex_testlock(&rw->lock)) {
             /* test that it was not this thread owning both write and read lock */
+            /* We have the lock so we do not need a load-acquire. */
             if (rw->writer != d_r_get_thread_id()) {
                 /* we're assuming the writer has been forced to wait,
                    but since we can't tell whether it did indeed wait this
@@ -1315,7 +1323,7 @@ void
 d_r_write_unlock(read_write_lock_t *rw)
 {
 #ifdef DEADLOCK_AVOIDANCE
-    ASSERT(rw->writer == rw->lock.owner);
+    ASSERT(!mutex_ownable(&rw->lock) || rw->writer == rw->lock.owner);
 #endif
     rw->writer = INVALID_THREAD_ID;
     if (INTERNAL_OPTION(spin_yield_rwlock)) {
@@ -1332,7 +1340,7 @@ d_r_write_unlock(read_write_lock_t *rw)
     */
     d_r_mutex_unlock(&rw->lock);
     /* check whether any reader is currently waiting */
-    if (rw->num_pending_readers > 0) {
+    if (atomic_aligned_read_int(&rw->num_pending_readers) > 0) {
         /* after we've released the write lock, pending readers will no longer wait */
         rwlock_notify_readers(rw);
     }
@@ -1341,8 +1349,7 @@ d_r_write_unlock(read_write_lock_t *rw)
 bool
 self_owns_write_lock(read_write_lock_t *rw)
 {
-    /* ASSUMPTION: reading owner field is atomic */
-    return (rw->writer == d_r_get_thread_id());
+    return (ATOMIC_READ_THREAD_ID(&rw->writer) == d_r_get_thread_id());
 }
 
 /****************************************************************************/
@@ -1772,6 +1779,9 @@ print_file(file_t f, const char *fmt, ...)
  * Returns false if there was not room for the string plus a null,
  * but still prints the maximum that will fit plus a null.
  */
+/* XXX: This is duplicated in ir/decodlib.c's print_to_buffer.
+ * Could we move this into io.c to share it with decodelib?
+ */
 static bool
 vprint_to_buffer(char *buf, size_t bufsz, size_t *sofar INOUT, const char *fmt,
                  va_list ap)
@@ -1784,7 +1794,13 @@ vprint_to_buffer(char *buf, size_t bufsz, size_t *sofar INOUT, const char *fmt,
     len = d_r_vsnprintf(buf + *sofar, bufsz - *sofar, fmt, ap);
     /* we support appending an empty string (len==0) */
     ok = (len >= 0 && len < (ssize_t)(bufsz - *sofar));
-    *sofar += (len == -1 ? (bufsz - *sofar - 1) : (len < 0 ? 0 : len));
+    /* If the written chars filled up the max size exactly, that max size is returned
+     * without a final null by d_r_vsnprintf().  Since we guarantee a null, we have
+     * to clobber a char, just like for -1 being returned when the written chars do
+     * not all fit.
+     */
+    *sofar += (len == -1 || len == (ssize_t)(bufsz - *sofar) ? (bufsz - *sofar - 1)
+                                                             : (len < 0 ? 0 : len));
     /* be paranoid: though usually many calls in a row and could delay until end */
     buf[bufsz - 1] = '\0';
     return ok;
@@ -1857,12 +1873,12 @@ d_r_notify(syslog_event_type_t priority, bool internal, bool synch,
            const char *fmt, ...)
 {
     char msgbuf[MAX_LOG_LENGTH];
-    int size;
     va_list ap;
     va_start(ap, fmt);
-    /* FIXME : the vsnprintf call is not needed in the most common case where
-     * we are going to just os_syslog, but it gets pretty ugly to do that */
-    size = vsnprintf(msgbuf, sizeof(msgbuf), fmt, ap);
+    /* XXX: the vsnprintf call is not needed in the most common case where
+     * we are going to just os_syslog, but it gets pretty ugly to do that
+     */
+    vsnprintf(msgbuf, sizeof(msgbuf), fmt, ap);
     NULL_TERMINATE_BUFFER(msgbuf); /* always NULL terminate */
     /* not a good idea to assert here since we'll just die and lose original message,
      * so we don't check size return value and just go ahead and truncate
@@ -2320,30 +2336,31 @@ is_readable_without_exception_try(byte *pc, size_t size)
         return is_readable_without_exception(pc, size);
     }
 
-    TRY_EXCEPT(dcontext,
-               {
-                   byte *check_pc = (byte *)ALIGN_BACKWARD(pc, PAGE_SIZE);
-                   if (size > (size_t)((byte *)POINTER_MAX - pc)) {
-                       ASSERT_NOT_TESTED();
-                       size = (byte *)POINTER_MAX - pc;
-                   }
-                   do {
-                       PROBE_READ_PC(check_pc);
-                       /* note the minor perf benefit - we check the whole loop
-                        * in a single TRY/EXCEPT, and no system calls xref
-                        * is_readable_without_exception() [based on safe_read]
-                        * and is_readable_without_exception_query_os() [based on
-                        * query_virtual_memory].
-                        */
+    TRY_EXCEPT(
+        dcontext,
+        {
+            byte *check_pc = (byte *)ALIGN_BACKWARD(pc, PAGE_SIZE);
+            if (size > (size_t)((byte *)POINTER_MAX - pc)) {
+                ASSERT_NOT_TESTED();
+                size = (byte *)POINTER_MAX - pc;
+            }
+            do {
+                PROBE_READ_PC(check_pc);
+                /* note the minor perf benefit - we check the whole loop
+                 * in a single TRY/EXCEPT, and no system calls xref
+                 * is_readable_without_exception() [based on safe_read]
+                 * and is_readable_without_exception_query_os() [based on
+                 * query_virtual_memory].
+                 */
 
-                       check_pc += PAGE_SIZE;
-                   } while (check_pc != 0 /*overflow*/ && check_pc < pc + size);
-                   /* TRY usage note: can't return here */
-               },
-               { /* EXCEPT */
-                 /* no state to preserve */
-                 return false;
-               });
+                check_pc += PAGE_SIZE;
+            } while (check_pc != 0 /*overflow*/ && check_pc < pc + size);
+            /* TRY usage note: can't return here */
+        },
+        { /* EXCEPT */
+          /* no state to preserve */
+          return false;
+        });
 
     return true;
 }
@@ -2358,14 +2375,15 @@ is_string_readable_without_exception(char *str, size_t *str_length /* OPTIONAL O
         return false;
 
     if (dcontext != NULL) {
-        TRY_EXCEPT(dcontext, /* try */
-                   {
-                       length = strlen(str);
-                       if (str_length != NULL)
-                           *str_length = length;
-                       /* NOTE - can't return here (try usage restriction) */
-                   },
-                   /* except */ { return false; });
+        TRY_EXCEPT(
+            dcontext, /* try */
+            {
+                length = strlen(str);
+                if (str_length != NULL)
+                    *str_length = length;
+                /* NOTE - can't return here (try usage restriction) */
+            },
+            /* except */ { return false; });
         return true;
     } else {
         /* ok have to do this the hard way... */
@@ -2544,7 +2562,7 @@ strcasecmp_with_wildcards(const char *regexp, const char *consider)
             return -1;
         } else if (*consider == '\0')
             return 1;
-        ASSERT(*regexp != EOF && *consider != EOF);
+        ASSERT((sbyte)*regexp != EOF && (sbyte)*consider != EOF);
         cr = (char)tolower(*regexp);
         cc = (char)tolower(*consider);
         if (cr != '?' && cr != cc) {
@@ -2647,7 +2665,7 @@ create_log_dir(int dir_type)
 {
 #ifdef UNIX
     char *pre_execve = getenv(DYNAMORIO_VAR_EXECVE_LOGDIR);
-    bool sharing_logdir = false;
+    DEBUG_DECLARE(bool sharing_logdir = false;)
 #endif
     /* synchronize */
     acquire_recursive_lock(&logdir_mutex);
@@ -2661,7 +2679,7 @@ create_log_dir(int dir_type)
         if (IS_STRING_OPTION_EMPTY(logdir) &&
             (get_config_val_ex(DYNAMORIO_VAR_LOGDIR, NULL, &is_env) == NULL || is_env)) {
             /* use same dir as pre-execve! */
-            sharing_logdir = true;
+            DODEBUG(sharing_logdir = true;);
             strncpy(logdir, pre_execve, BUFFER_SIZE_ELEMENTS(logdir));
             NULL_TERMINATE_BUFFER(logdir); /* if max no null */
             logdir_initialized = true;
@@ -3040,6 +3058,7 @@ stats_thread_exit(dcontext_t *dcontext)
     }
 }
 
+DISABLE_NULL_SANITIZER
 void
 dump_thread_stats(dcontext_t *dcontext, bool raw)
 {
@@ -3098,6 +3117,7 @@ dump_thread_stats(dcontext_t *dcontext, bool raw)
 #    endif
 }
 
+DISABLE_NULL_SANITIZER
 void
 dump_global_stats(bool raw)
 {
@@ -4568,31 +4588,33 @@ stats_get_snapshot(dr_stats_t *drstats)
     }
     drstats->peak_num_threads = GLOBAL_STAT(peak_num_threads);
     drstats->num_threads_created = GLOBAL_STAT(num_threads_created);
-    if (drstats->size > offsetof(dr_stats_t, synchs_not_at_safe_spot)) {
-        drstats->synchs_not_at_safe_spot = GLOBAL_STAT(synchs_not_at_safe_spot);
-    }
-    if (drstats->size > offsetof(dr_stats_t, peak_vmm_blocks_unreach_heap)) {
-        /* These fields were added all at once. */
-        drstats->peak_vmm_blocks_unreach_heap = GLOBAL_STAT(peak_vmm_blocks_unreach_heap);
-        drstats->peak_vmm_blocks_unreach_stack =
-            GLOBAL_STAT(peak_vmm_blocks_unreach_stack);
-        drstats->peak_vmm_blocks_unreach_special_heap =
-            GLOBAL_STAT(peak_vmm_blocks_unreach_special_heap);
-        drstats->peak_vmm_blocks_unreach_special_mmap =
-            GLOBAL_STAT(peak_vmm_blocks_unreach_special_mmap);
-        drstats->peak_vmm_blocks_reach_heap = GLOBAL_STAT(peak_vmm_blocks_reach_heap);
-        drstats->peak_vmm_blocks_reach_cache = GLOBAL_STAT(peak_vmm_blocks_reach_cache);
-        drstats->peak_vmm_blocks_reach_special_heap =
-            GLOBAL_STAT(peak_vmm_blocks_reach_special_heap);
-        drstats->peak_vmm_blocks_reach_special_mmap =
-            GLOBAL_STAT(peak_vmm_blocks_reach_special_mmap);
-    }
-    if (drstats->size > offsetof(dr_stats_t, num_native_signals)) {
+    if (drstats->size <= offsetof(dr_stats_t, synchs_not_at_safe_spot))
+        return true;
+    drstats->synchs_not_at_safe_spot = GLOBAL_STAT(synchs_not_at_safe_spot);
+    if (drstats->size <= offsetof(dr_stats_t, peak_vmm_blocks_unreach_heap))
+        return true;
+    /* These fields were added all at once. */
+    drstats->peak_vmm_blocks_unreach_heap = GLOBAL_STAT(peak_vmm_blocks_unreach_heap);
+    drstats->peak_vmm_blocks_unreach_stack = GLOBAL_STAT(peak_vmm_blocks_unreach_stack);
+    drstats->peak_vmm_blocks_unreach_special_heap =
+        GLOBAL_STAT(peak_vmm_blocks_unreach_special_heap);
+    drstats->peak_vmm_blocks_unreach_special_mmap =
+        GLOBAL_STAT(peak_vmm_blocks_unreach_special_mmap);
+    drstats->peak_vmm_blocks_reach_heap = GLOBAL_STAT(peak_vmm_blocks_reach_heap);
+    drstats->peak_vmm_blocks_reach_cache = GLOBAL_STAT(peak_vmm_blocks_reach_cache);
+    drstats->peak_vmm_blocks_reach_special_heap =
+        GLOBAL_STAT(peak_vmm_blocks_reach_special_heap);
+    drstats->peak_vmm_blocks_reach_special_mmap =
+        GLOBAL_STAT(peak_vmm_blocks_reach_special_mmap);
+    if (drstats->size <= offsetof(dr_stats_t, num_native_signals))
+        return true;
 #ifdef UNIX
-        drstats->num_native_signals = GLOBAL_STAT(num_native_signals);
+    drstats->num_native_signals = GLOBAL_STAT(num_native_signals);
 #else
-        drstats->num_native_signals = 0;
+    drstats->num_native_signals = 0;
 #endif
-    }
+    if (drstats->size <= offsetof(dr_stats_t, num_cache_exits))
+        return true;
+    drstats->num_cache_exits = GLOBAL_STAT(num_exits);
     return true;
 }

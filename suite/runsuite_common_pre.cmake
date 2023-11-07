@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2011-2021 Google, Inc.    All rights reserved.
+# Copyright (c) 2011-2023 Google, Inc.    All rights reserved.
 # Copyright (c) 2009-2010 VMware, Inc.    All rights reserved.
 # **********************************************************
 
@@ -447,7 +447,7 @@ if (NOT DEFINED KERNEL_IS_X64)  # Allow variable override.
       RESULT_VARIABLE cmd_result)
     # If for some reason uname fails (not on PATH), assume the kernel is x64
     # anyway.
-    if (cmd_result OR "${machine}" MATCHES "x86_64|aarch64")
+    if (cmd_result OR "${machine}" MATCHES "x86_64|aarch64|arm64")
       set(KERNEL_IS_X64 ON)
     else ()
       set(KERNEL_IS_X64 OFF)
@@ -686,6 +686,11 @@ function(testbuild_ex name is64 initial_cache test_only_in_long
         set(ctest_test_args ${ctest_test_args} EXCLUDE ${arg_exclude})
       endif (NOT "${arg_exclude}" STREQUAL "")
       set(ctest_test_args ${ctest_test_args} ${extra_ctest_args})
+      if ("${CMAKE_VERSION}" VERSION_GREATER_EQUAL "3.17")
+        # CMake 3.17 supports retrying failed tests.  We avoid flaky tests on
+        # particular platforms failing the whole suite by trying multiple times.
+        set(ctest_test_args ${ctest_test_args} "REPEAT" "UNTIL_PASS:3")
+      endif ()
       if (WIN32 AND TEST_LONG)
         # FIXME i#265: on Windows we can't run multiple instances of
         # the same app b/c of global reg key conflicts: should support
@@ -718,7 +723,7 @@ function(testbuild_ex name is64 initial_cache test_only_in_long
       set(prefix "___${CTEST_BUILD_NAME}___${SUITE_TYPE}___XML___")
       foreach (xml ${xml_files})
         get_filename_component(base "${xml}" NAME)
-        # Avoid confusion with a later package buid in the same dir by
+        # Avoid confusion with a later package build in the same dir by
         # renaming instead of copying.
         file(RENAME "${xml}"
           "${CTEST_DROP_SITE}:${CTEST_DROP_LOCATION}/${prefix}${base}")

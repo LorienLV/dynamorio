@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2017-2018 Google, Inc.  All rights reserved.
+ * Copyright (c) 2017-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -38,6 +38,9 @@
 #include <string>
 #include "analysis_tool.h"
 
+namespace dynamorio {
+namespace drmemtrace {
+// NOCHECK does this order matter vs @file?
 /**
  * @file drmemtrace/cache_simulator_create.h
  * @brief DrMemtrace cache simulator creation.
@@ -67,6 +70,7 @@ struct cache_simulator_knobs_t {
         , warmup_fraction(0.0)
         , sim_refs(1ULL << 63)
         , cpu_scheduling(false)
+        , use_physical(false)
         , verbose(0)
     {
     }
@@ -87,6 +91,7 @@ struct cache_simulator_knobs_t {
     double warmup_fraction;
     uint64_t sim_refs;
     bool cpu_scheduling;
+    bool use_physical;
     unsigned int verbose;
 };
 
@@ -106,5 +111,8 @@ analysis_tool_t *
 cache_miss_analyzer_create(const cache_simulator_knobs_t &knobs,
                            unsigned int miss_count_threshold, double miss_frac_threshold,
                            double confidence_threshold);
+
+} // namespace drmemtrace
+} // namespace dynamorio
 
 #endif /* _CACHE_SIMULATOR_CREATE_H_ */

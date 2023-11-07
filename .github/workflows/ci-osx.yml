@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2020 Google, Inc.  All rights reserved.
+# Copyright (c) 2020-2023 Google, Inc.  All rights reserved.
 # **********************************************************
 
 # Redistribution and use in source and binary forms, with or without
@@ -39,6 +39,7 @@ on:
       - master
   pull_request:
     types: [opened, reopened, synchronize]
+  merge_group:
 
   # Manual trigger using the Actions page. May remove when integration complete.
   workflow_dispatch:
@@ -50,10 +51,12 @@ defaults:
 jobs:
   # 64-bit OSX build with clang and run tests:
   osx-x86-64:
-    runs-on: macos-10.15
+    runs-on: macos-11
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     # Cancel any prior runs for a PR (but do not cancel master branch runs).
     - uses: n1hility/cancel-previous-runs@v2
@@ -64,8 +67,10 @@ jobs:
     - run: git fetch --no-tags --depth=1 origin master
 
     - name: Create Build Environment
+      # XXX: We should install doxygen too but it's a different version and
+      # hits issues about incompatible options in the Doxyfile.
       run: |
-        brew install nasm
+        brew install nasm zlib snappy lz4
 
     - name: Run Suite
       working-directory: ${{ github.workspace }}
@@ -77,7 +82,7 @@ jobs:
         # https://github.community/t/selecting-an-xcode-version/16204/3
         # To find available versions, add the following as a step above:
         #  - run: ls -l /Applications
-        DEVELOPER_DIR: /Applications/Xcode_11.3.1.app/Contents/Developer
+        DEVELOPER_DIR: /Applications/Xcode_13.2.1.app/Contents/Developer
         CI_TRIGGER: ${{ github.event_name }}
         CI_BRANCH: ${{ github.ref }}
 

@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2012-2017 Google, Inc.    All rights reserved.
+# Copyright (c) 2012-2023 Google, Inc.    All rights reserved.
 # **********************************************************
 #
 # Redistribution and use in source and binary forms, with or without
@@ -235,6 +235,25 @@ function (check_avx512_processor_and_compiler_support out)
   set(${out} ${proc_found_avx512} PARENT_SCOPE)
 endfunction (check_avx512_processor_and_compiler_support)
 
+# Check if the building machine support Intel PT.
+# This function only checks if PT-related tests need to be built. PT-capable
+# binaries can be built on any system. When building an export module, please
+# do not use it to check if PT-related libraries need to be built.
+function(check_intel_pt_support out)
+  if (NOT LINUX OR NOT X86 OR NOT X64)
+    message(STATUS "Intel PT not supported on this platform.")
+    set(${out} 0 PARENT_SCOPE)
+  else ()
+    if (EXISTS "/sys/devices/intel_pt/type")
+      message(STATUS "Intel PT is available.")
+      set(${out} 1 PARENT_SCOPE)
+    else ()
+      message(STATUS "Intel PT not found.")
+      set(${out} 0 PARENT_SCOPE)
+    endif()
+  endif ()
+endfunction(check_intel_pt_support)
+
 if (UNIX)
   # We always use a script for our own library bounds (PR 361594).
   # We could build this at configure time instead of build time as
@@ -294,3 +313,32 @@ if (UNIX)
   endfunction (set_preferred_base_start_and_end)
 
 endif (UNIX)
+
+function (check_sve_processor_and_compiler_support out)
+  include(CheckCSourceRuns)
+  set(sve_prog "#include <stdint.h>
+                int main() {
+                    uint64_t vl = 0;
+                    asm(\"rdvl %[dest], 1\" : [dest] \"=r\" (vl) : :);
+                    (void) vl;
+                    return 0;
+                 }")
+  set(CMAKE_REQUIRED_FLAGS ${CFLAGS_SVE})
+  if (CMAKE_CROSSCOMPILING)
+    # If we are cross-compiling check_c_source_runs() can't run the executable on the
+    # host to find out whether the target processor supports SVE, so we assume it
+    # doesn't.
+    set(proc_found_sve_EXITCODE 1 CACHE STRING
+        "Set to 0 if target processor/emulator supports SVE to enable SVE tests"
+        FORCE)
+  else ()
+    check_c_source_runs("${sve_prog}" proc_found_sve)
+  endif ()
+  if (proc_found_sve)
+    message(STATUS "Compiler and processor support SVE.")
+  else ()
+    message(STATUS "WARNING: Compiler or processor do not support SVE. "
+                   "Skipping tests")
+  endif ()
+  set(${out} ${proc_found_sve} PARENT_SCOPE)
+endfunction (check_sve_processor_and_compiler_support)

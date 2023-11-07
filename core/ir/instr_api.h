@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2002-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -131,7 +131,7 @@ typedef enum _dr_pred_type_t {
     DR_PRED_VS, /**< ARM condition: 0110 Overflow                (V == 1)           */
     DR_PRED_VC, /**< ARM condition: 0111 No overflow             (V == 0)           */
     DR_PRED_HI, /**< ARM condition: 1000 Unsigned higher         (C == 1 and Z == 0)*/
-    DR_PRED_LS, /**< ARM condition: 1001 Unsigned lower or same  (C == 0 or Z == 1) */
+    DR_PRED_LS, /**< ARM condition: 1001 Unsigned lower or same  (C == 1 or Z == 0) */
     DR_PRED_GE, /**< ARM condition: 1010 Signed >=               (N == V)           */
     DR_PRED_LT, /**< ARM condition: 1011 Signed less than        (N != V)           */
     DR_PRED_GT, /**< ARM condition: 1100 Signed greater than     (Z == 0 and N == V)*/
@@ -146,6 +146,46 @@ typedef enum _dr_pred_type_t {
     /* Aliases */
     DR_PRED_HS = DR_PRED_CS, /**< ARM condition: alias for DR_PRED_CS. */
     DR_PRED_LO = DR_PRED_CC, /**< ARM condition: alias for DR_PRED_CC. */
+#    ifdef AARCH64
+    /* Some SVE instructions use the NZCV condition flags in a different way to the base
+     * AArch64 instruction set, and SVE introduces aliases for the condition codes based
+     * on the SVE interpretation of the flags. The state of predicate registers can be
+     * used to alter control flow with condition flags being set or cleared by an explicit
+     * test of a predicate register or by instructions which generate a predicate result.
+     *
+     *  N   First   Set if the first active element was true.
+     *  Z   None    Cleared if any active element was true.
+     *  C   !Last   Cleared if the last active element was true.
+     *  V           Cleared by all flag setting SVE instructions except CTERMEQ and
+     *              CTERMNE, for scalarised loops.
+     */
+    DR_PRED_SVE_NONE = DR_PRED_EQ, /**<  0000 All active elements were false
+                                              or no active elements            (Z == 1) */
+    DR_PRED_SVE_ANY = DR_PRED_NE, /**<   0001 An active element was true       (Z == 0) */
+    DR_PRED_SVE_NLAST = DR_PRED_CS, /**< 0010 Last active element was false
+                                              or no active elements            (C == 1) */
+    DR_PRED_SVE_LAST = DR_PRED_CC, /**<  0011 Last active element was true     (C == 0) */
+    DR_PRED_SVE_FIRST = DR_PRED_MI, /**< 0100 First active element was true    (N == 1) */
+    DR_PRED_SVE_NFRST = DR_PRED_PL, /**< 0101 First active element was false
+                                              or no active elements            (N == 0) */
+    DR_PRED_SVE_PLAST = DR_PRED_LS, /**< 1001 Last active element was true,
+                                              all active elements were false,
+                                              or no active elements   (C == 1 or Z == 0)*/
+    DR_PRED_SVE_TCONT = DR_PRED_GE, /**< 1010 CTERM termination condition
+                                              not detected, continue loop      (N == V) */
+    DR_PRED_SVE_TSTOP = DR_PRED_LT, /**< 1011 CTERM termination condition
+                                              detected, terminate loop         (N != V) */
+#    endif
+#endif
+#ifdef RISCV64
+    /* FIXME i#3544: RISC-V does not have compare flag register! */
+    /* Aliases for XINST_CREATE_jump_cond() and other cross-platform routines. */
+    DR_PRED_EQ, /**< Condition code: equal. */
+    DR_PRED_NE, /**< Condition code: not equal. */
+    DR_PRED_LT, /**< Condition code: signed less than. */
+    DR_PRED_LE, /**< Condition code: signed less than or equal. */
+    DR_PRED_GT, /**< Condition code: signed greater than. */
+    DR_PRED_GE, /**< Condition code: signed greater than or equal. */
 #endif
 } dr_pred_type_t;
 
@@ -239,6 +279,12 @@ struct _instr_t {
      * and called when the label is freed.
      */
     uint length;
+
+    /* The category of this instr (e.g. branch, load/store, etc.) as a combination
+     * of dr_instr_category_t bit values.
+     */
+    uint category;
+
     union {
         byte *bytes;
         instr_label_callback_t label_cb;
@@ -278,9 +324,8 @@ struct _instr_t {
     uint eflags;   /* contains EFLAGS_ bits, but amount of info varies
                     * depending on how instr was decoded/built */
 
-    /* this field is for the use of passes as an annotation.
-     * it is also used to hold the offset of an instruction when encoding
-     * pc-relative instructions. A small range of values is reserved for internal use
+    /* This field is for the use of passes as an annotation.
+     * A small range of values is reserved for internal use
      * by DR and cannot be used by clients; see DR_NOTE_FIRST_RESERVED in globals.h.
      */
     void *note;
@@ -289,6 +334,8 @@ struct _instr_t {
     instr_t *prev;
     instr_t *next;
 
+    /* Used to hold the relative offset within an instruction list when encoding. */
+    size_t offset;
 };     /* instr_t */
 #endif /* DR_FAST_IR */
 
@@ -480,9 +527,6 @@ DR_API
 INSTR_INLINE
 /**
  * Gets the value of the user-controlled note field in \p instr.
- * \note Important: is also used when emitting for targets that are other
- * instructions.  Thus it will be overwritten when calling instrlist_encode()
- * or instrlist_encode_to_copy() with \p has_instr_jmp_targets set to true.
  * \note The note field is copied (shallowly) by instr_clone().
  */
 void *
@@ -685,9 +729,39 @@ int
 instr_get_opcode(instr_t *instr);
 
 DR_API
+/**
+ * Returns \p instr's set of categories (set of DR_INSTR_CATEGORY_ constants).
+ * See #dr_instr_category_t.
+ * This API is only supported for decoded instructions, not for synthetic ones.
+ * Currently this is only supported for AArch64.
+ */
+uint
+instr_get_category(instr_t *instr);
+
+/**
+ * Get the relative offset of \p instr in an encoded instruction list.
+ *
+ * \note instrlist_encode* sets the offset field in each instr_t in the encoded
+ * instruction list. Therefore, this API must be called only after calling
+ * instrlist_encode*.
+ */
+DR_API
+size_t
+instr_get_offset(instr_t *instr);
+
+DR_API
 /** Assumes \p opcode is an OP_ constant and sets it to be instr's opcode. */
 void
 instr_set_opcode(instr_t *instr, int opcode);
+
+DR_API
+/**
+ * Assumes \p category is a set of DR_INSTR_CATEGORY_ constants
+ * and sets it to be instr's category.
+ * See #dr_instr_category_t.
+ */
+void
+instr_set_category(instr_t *instr, uint category);
 
 DR_API
 INSTR_INLINE
@@ -789,6 +863,18 @@ DR_API
  */
 void
 instr_set_target(instr_t *cti_instr, opnd_t target);
+
+DR_API
+/**
+ * If \p store_instr is not a store (instr_writes_memory() returns false), returns
+ * false.  If \p store_instr is a store (instr_writes_memory() returns true), returns
+ * whether its source operand with index \p source_ordinal (as passed to
+ * instr_get_src()) is a source for the value that is stored.  (If not, it may be an
+ * address register that is updated for pre-index or post-index writeback forms, or
+ * some other source that does not directly affect the value written to memory.)
+ */
+bool
+instr_is_opnd_store_source(instr_t *store_instr, int source_ordinal);
 
 INSTR_INLINE_INTERNALLY
 DR_API
@@ -1620,6 +1706,20 @@ instr_memory_reference_size(instr_t *instr);
 
 DR_API
 /**
+ * Returns the number of memory read accesses of the instruction.
+ */
+uint
+instr_num_memory_read_access(instr_t *instr);
+
+DR_API
+/**
+ * Returns the number of memory write accesses of the instruction.
+ */
+uint
+instr_num_memory_write_access(instr_t *instr);
+
+DR_API
+/**
  * \return a pointer to user-controlled data fields in a label instruction.
  * These fields are available for use by clients for their own purposes.
  * Returns NULL if \p instr is not a label instruction.
@@ -1842,10 +1942,28 @@ bool
 instr_is_rep_string_op(instr_t *instr);
 
 /**
- * Indicates which type of floating-point operation and instruction performs.
+ * Indicates which category the instruction corresponds to.
  */
 typedef enum {
-    DR_FP_STATE,   /**< Loads, stores, or queries general floating point state. */
+    DR_INSTR_CATEGORY_UNCATEGORIZED = 0x0, /**< Uncategorized. */
+    DR_INSTR_CATEGORY_FP = 0x1,            /**< Floating-Point operations. */
+    DR_INSTR_CATEGORY_LOAD = 0x2,          /**< Loads. */
+    DR_INSTR_CATEGORY_STORE = 0x4,         /**< Stores. */
+    DR_INSTR_CATEGORY_BRANCH = 0x8,        /**< Branches. */
+    DR_INSTR_CATEGORY_SIMD = 0x10,    /**< Operations with vector registers (SIMD). */
+    DR_INSTR_CATEGORY_STATE = 0x20,   /**< Saves, restores, or queries processor state. */
+    DR_INSTR_CATEGORY_MOVE = 0x40,    /**< Moves value from one location to another. */
+    DR_INSTR_CATEGORY_CONVERT = 0x80, /**< Converts to or from value. */
+    DR_INSTR_CATEGORY_MATH = 0x100, /**< Performs arithmetic or conditional operations. */
+    DR_INSTR_CATEGORY_OTHER = 0x200 /**< Other types of instructions. */
+} dr_instr_category_t;
+
+/**
+ * Indicates which type of floating-point operation and instruction performs.
+ * \deprecated Replaced by the more general #dr_instr_category_t.
+ */
+typedef enum {
+    DR_FP_STATE,   /**< Saves, restores, or queries processor state. */
     DR_FP_MOVE,    /**< Moves floating point values from one location to another. */
     DR_FP_CONVERT, /**< Converts to or from floating point values. */
     DR_FP_MATH,    /**< Performs arithmetic or conditional operations. */
@@ -1857,6 +1975,18 @@ DR_API
  * @param[in] instr  The instruction to query
  * @param[out] type  If the return value is true and \p type is
  *   non-NULL, the type of the floating point operation is written to \p type.
+ */
+bool
+instr_is_floating_type(instr_t *instr, dr_instr_category_t *type);
+
+DR_API
+/**
+ * Returns true iff \p instr is a floating point instruction.
+ * @param[in] instr  The instruction to query
+ * @param[out] type  If the return value is true and \p type is
+ *   non-NULL, the type of the floating point operation is written to \p type.
+ * \deprecated Prefer instr_is_floating_type() which uses the more general
+ * #dr_instr_category_t.
  */
 bool
 instr_is_floating_ex(instr_t *instr, dr_fp_type_t *type);
@@ -2112,6 +2242,16 @@ instr_create_1dst_5src(void *drcontext, int opcode, opnd_t dst, opnd_t src1, opn
 DR_API
 /**
  * Convenience routine that returns an initialized instr_t allocated on the
+ * thread-local heap with opcode \p opcode, one destination (\p dst),
+ * and six sources (\p src1, \p src2, \p src3, \p src4, \p src5, \p src6).
+ */
+instr_t *
+instr_create_1dst_6src(void *drcontext, int opcode, opnd_t dst, opnd_t src1, opnd_t src2,
+                       opnd_t src3, opnd_t src4, opnd_t src5, opnd_t src6);
+
+DR_API
+/**
+ * Convenience routine that returns an initialized instr_t allocated on the
  * thread-local heap with opcode \p opcode, two destinations (\p dst1, \p dst2)
  * and no sources.
  */
@@ -2290,6 +2430,30 @@ DR_API
 /**
  * Convenience routine that returns an initialized instr_t allocated
  * on the thread-local heap with opcode \p opcode, four destinations
+ * (\p dst1, \p dst2, \p dst3, \p dst4) and five sources
+ * (\p src1, \p src2, \p src3, \p src4, \p src5).
+ */
+instr_t *
+instr_create_4dst_5src(void *drcontext, int opcode, opnd_t dst1, opnd_t dst2, opnd_t dst3,
+                       opnd_t dst4, opnd_t src1, opnd_t src2, opnd_t src3, opnd_t src4,
+                       opnd_t src5);
+
+DR_API
+/**
+ * Convenience routine that returns an initialized instr_t allocated
+ * on the thread-local heap with opcode \p opcode, four destinations
+ * (\p dst1, \p dst2, \p dst3, \p dst4) and six sources
+ * (\p src1, \p src2, \p src3, \p src4, \p src5, \p src6).
+ */
+instr_t *
+instr_create_4dst_6src(void *drcontext, int opcode, opnd_t dst1, opnd_t dst2, opnd_t dst3,
+                       opnd_t dst4, opnd_t src1, opnd_t src2, opnd_t src3, opnd_t src4,
+                       opnd_t src5, opnd_t src6);
+
+DR_API
+/**
+ * Convenience routine that returns an initialized instr_t allocated
+ * on the thread-local heap with opcode \p opcode, four destinations
  * (\p dst1, \p dst2, \p dst3, \p dst4) and seven sources
  * (\p src1, \p src2, \p src3, \p src4, \p src5, \p src6, \p src7).
  */
@@ -2320,6 +2484,18 @@ instr_t *
 instr_create_5dst_4src(void *drcontext, int opcode, opnd_t dst1, opnd_t dst2, opnd_t dst3,
                        opnd_t dst4, opnd_t dst5, opnd_t src1, opnd_t src2, opnd_t src3,
                        opnd_t src4);
+
+DR_API
+/**
+ * Convenience routine that returns an initialized instr_t allocated
+ * on the thread-local heap with opcode \p opcode, five destinations
+ * (\p dst1, \p dst2, \p dst3, \p dst4, \p dst5) and five sources
+ * (\p src1, \p src2, \p src3, \p src4, \p src5).
+ */
+instr_t *
+instr_create_5dst_5src(void *drcontext, int opcode, opnd_t dst1, opnd_t dst2, opnd_t dst3,
+                       opnd_t dst4, opnd_t dst5, opnd_t src1, opnd_t src2, opnd_t src3,
+                       opnd_t src4, opnd_t src5);
 
 DR_API
 /**
@@ -2533,6 +2709,19 @@ enum {
 #    define EFLAGS_MSR_G 0x4
 /** The bits in the 4-bit OP_msr immediate that select the nzcvqg status flags. */
 #    define EFLAGS_MSR_NZCVQG (EFLAGS_MSR_NZCVQ | EFLAGS_MSR_G)
+#elif defined(RISCV64)
+/* FIXME i#3544: Not implemented */
+/** Platform-independent macro for reads all arithmetic flags. */
+#    define EFLAGS_READ_ARITH 0
+#    define EFLAGS_READ_ALL 0      /**< Reads all flags. */
+#    define EFLAGS_READ_NON_PRED 0 /**< Flags not read by predicates. */
+/** Platform-independent macro for writes all arithmetic flags. */
+#    define EFLAGS_WRITE_ARITH 0
+#    define EFLAGS_WRITE_ALL 0 /**< Writes all flags. */
+/** Converts an EFLAGS_WRITE_* value to the corresponding EFLAGS_READ_* value. */
+#    define EFLAGS_WRITE_TO_READ(x) (x)
+/** Converts an EFLAGS_READ_* value to the corresponding EFLAGS_WRITE_* value. */
+#    define EFLAGS_READ_TO_WRITE(x) (x)
 #endif /* X86 */
 
 #endif /* _DR_IR_INSTR_H_ */

@@ -32,14 +32,14 @@
  */
 
 /* AVX 256-bit */
-OPCODE(vunpcklps_256, vunpcklps, vunpcklps, 0, REGARG(YMM0),
-       REGARG_PARTIAL(YMM1, OPSZ_16), MEMARG(OPSZ_16))
-OPCODE(vunpcklpd_256, vunpcklpd, vunpcklpd, 0, REGARG(YMM0),
-       REGARG_PARTIAL(YMM1, OPSZ_16), MEMARG(OPSZ_16))
-OPCODE(vunpckhps_256, vunpckhps, vunpckhps, 0, REGARG(YMM0),
-       REGARG_PARTIAL(YMM1, OPSZ_16), MEMARG(OPSZ_16))
-OPCODE(vunpckhpd_256, vunpckhpd, vunpckhpd, 0, REGARG(YMM0),
-       REGARG_PARTIAL(YMM1, OPSZ_16), MEMARG(OPSZ_16))
+OPCODE(vunpcklps_256, vunpcklps, vunpcklps, 0, REGARG(YMM0), REGARG(YMM1),
+       MEMARG(OPSZ_32))
+OPCODE(vunpcklpd_256, vunpcklpd, vunpcklpd, 0, REGARG(YMM0), REGARG(YMM1),
+       MEMARG(OPSZ_32))
+OPCODE(vunpckhps_256, vunpckhps, vunpckhps, 0, REGARG(YMM0), REGARG(YMM1),
+       MEMARG(OPSZ_32))
+OPCODE(vunpckhpd_256, vunpckhpd, vunpckhpd, 0, REGARG(YMM0), REGARG(YMM1),
+       MEMARG(OPSZ_32))
 OPCODE(vandps_256, vandps, vandps, 0, REGARG(YMM0), REGARG(YMM1), MEMARG(OPSZ_32))
 OPCODE(vandpd_256, vandpd, vandpd, 0, REGARG(YMM0), REGARG(YMM1), MEMARG(OPSZ_32))
 OPCODE(vandnps_256, vandnps, vandnps, 0, REGARG(YMM0), REGARG(YMM1), MEMARG(OPSZ_32))
@@ -422,4 +422,12 @@ OPCODE(vfnmsub213pd_256, vfnmsub213pd, vfnmsub213pd, 0, REGARG(YMM0), REGARG(YMM
 OPCODE(vfnmsub231ps_256, vfnmsub231ps, vfnmsub231ps, 0, REGARG(YMM0), REGARG(YMM1),
        MEMARG(OPSZ_32))
 OPCODE(vfnmsub231pd_256, vfnmsub231pd, vfnmsub231pd, 0, REGARG(YMM0), REGARG(YMM1),
+       MEMARG(OPSZ_32))
+OPCODE(vpdpbusd_xhixhixhi, vpdpbusd, vpdpbusd, 0, REGARG(YMM0), REGARG(YMM1),
+       MEMARG(OPSZ_32))
+OPCODE(vpdpbusds_xhixhixhi, vpdpbusds, vpdpbusds, 0, REGARG(YMM0), REGARG(YMM1),
+       MEMARG(OPSZ_32))
+OPCODE(vpdpwssd_xhixhixhi, vpdpwssd, vpdpwssd, 0, REGARG(YMM0), REGARG(YMM1),
+       MEMARG(OPSZ_32))
+OPCODE(vpdpwssds_xhixhixhi, vpdpwssds, vpdpwssds, 0, REGARG(YMM0), REGARG(YMM1),
        MEMARG(OPSZ_32))

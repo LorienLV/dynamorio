@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2020-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -33,15 +33,25 @@
 #ifndef _FUNC_VIEW_H_
 #define _FUNC_VIEW_H_ 1
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include <mutex>
 #include <set>
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "analysis_tool.h"
+#include "dr_api.h"
+#include "memref.h"
 #include "raw2trace.h"
 #include "raw2trace_directory.h"
+#include "trace_entry.h"
+
+namespace dynamorio {
+namespace drmemtrace {
 
 class func_view_t : public analysis_tool_t {
 public:
@@ -74,14 +84,19 @@ protected:
             num_returns += rhs.num_returns;
             return *this;
         }
-        int_least64_t num_calls = 0;
-        int_least64_t num_returns = 0;
+        int64_t num_calls = 0;
+        int64_t num_returns = 0;
         // TODO i#4083: Record the arg and retval distributions.
     };
     struct shard_data_t {
         memref_tid_t tid = 0;
         std::unordered_map<int, func_stats_t> func_map;
         std::string error;
+        // We use the function markers to record arguments and return
+        // values in the trace also for some system calls like futex.
+        // func_view skips printing details for such system calls,
+        // because these are not specified by the user.
+        bool last_was_syscall = false;
         int last_func_id = -1;
         int nesting_level = 0;
         int arg_idx = -1;
@@ -121,5 +136,8 @@ protected:
     // shard_map (process_memref, print_results) we are single-threaded.
     std::mutex shard_map_mutex_;
 };
+
+} // namespace drmemtrace
+} // namespace dynamorio
 
 #endif /* _FUNC_VIEW_H_ */

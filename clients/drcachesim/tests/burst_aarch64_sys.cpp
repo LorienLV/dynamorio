@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2020-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -34,7 +34,7 @@
  * a "burst" of execution in the middle of the application.  It then detaches.
  * It then post-processes the acquired trace and confirms various assertions.
  */
-#include "analyzer.h"
+#include "scheduler.h"
 #include "dr_api.h"
 #include "drmemtrace/drmemtrace.h"
 #include "tracer/instru.h"
@@ -45,6 +45,9 @@
 #include <iostream>
 #include <signal.h>
 #include <setjmp.h>
+
+namespace dynamorio {
+namespace drmemtrace {
 
 #define ASSERT_MSG(x, msg)                                                           \
     ((void)((!(x)) ? (dr_fprintf(STDERR, "ASSERT FAILURE: %s:%d: %s (%s)", __FILE__, \
@@ -162,6 +165,8 @@ post_process()
         std::string dir_err = dir.initialize(raw_dir, outdir);
         assert(dir_err.empty());
         raw2trace_t raw2trace(dir.modfile_bytes_, dir.in_files_, dir.out_files_,
+                              dir.out_archives_, dir.encoding_file_,
+                              dir.serial_schedule_file_, dir.cpu_schedule_file_,
                               dr_context);
         std::string error = raw2trace.do_conversion();
         if (!error.empty()) {
@@ -208,7 +213,7 @@ is_dc_zva_instr(void *dr_context, memref_t memref)
 }
 
 int
-main(int argc, const char *argv[])
+test_main(int argc, const char *argv[])
 {
     // App setup.
     signal(SIGILL, sigill_handler);
@@ -217,21 +222,33 @@ main(int argc, const char *argv[])
     std::string trace_dir = gather_trace();
 
     void *dr_context = dr_standalone_init();
-    analyzer_t analyzer(trace_dir);
-    if (!analyzer) {
-        std::cerr << "Failed to initialize iterator " << analyzer.get_error_string()
+    scheduler_t scheduler;
+    std::vector<scheduler_t::input_workload_t> sched_inputs;
+    sched_inputs.emplace_back(trace_dir);
+    if (scheduler.init(sched_inputs, 1, scheduler_t::make_scheduler_serial_options()) !=
+        scheduler_t::STATUS_SUCCESS) {
+        std::cerr << "Failed to initialize scheduler " << scheduler.get_error_string()
                   << "\n";
     }
     bool found_cache_line_size_marker = false;
+    bool found_page_size_marker = false;
     int dc_zva_instr_count = 0;
     int dc_zva_memref_count = 0;
     addr_t last_dc_zva_pc = 0;
-    for (reader_t &iter = analyzer.begin(); iter != analyzer.end(); ++iter) {
-        memref_t memref = *iter;
+    auto *stream = scheduler.get_stream(0);
+    memref_t memref;
+    for (scheduler_t::stream_status_t status = stream->next_record(memref);
+         status != scheduler_t::STATUS_EOF; status = stream->next_record(memref)) {
+        assert(status == scheduler_t::STATUS_OK);
         if (memref.marker.type == TRACE_TYPE_MARKER &&
             memref.marker.marker_type == TRACE_MARKER_TYPE_CACHE_LINE_SIZE) {
             found_cache_line_size_marker = true;
             assert(memref.marker.marker_value == proc_get_cache_line_size());
+        }
+        if (memref.marker.type == TRACE_TYPE_MARKER &&
+            memref.marker.marker_type == TRACE_MARKER_TYPE_PAGE_SIZE) {
+            found_page_size_marker = true;
+            assert(memref.marker.marker_value == dr_page_size());
         }
         if (is_dc_zva_instr(dr_context, memref)) {
             dc_zva_instr_count++;
@@ -255,7 +272,11 @@ main(int argc, const char *argv[])
     assert(dc_zva_memref_count != 0);
     assert(dc_zva_instr_count == dc_zva_memref_count);
     assert(found_cache_line_size_marker);
+    assert(found_page_size_marker);
     dr_standalone_exit();
 
     return 0;
 }
+
+} // namespace drmemtrace
+} // namespace dynamorio

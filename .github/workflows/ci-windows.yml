@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2020-2021 Google, Inc.  All rights reserved.
+# Copyright (c) 2020-2023 Google, Inc.  All rights reserved.
 # **********************************************************
 
 # Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@ on:
       - master
   pull_request:
     types: [opened, reopened, synchronize]
+  merge_group:
 
   # Manual trigger using the Actions page. May remove when integration complete.
   workflow_dispatch:
@@ -51,12 +52,14 @@ defaults:
 
 jobs:
   ###########################################################################
-  # 32-bit VS2017 and tests:
-  vs2017-32:
-    runs-on: windows-2016
+  # 32-bit VS2019 and tests:
+  vs2019-32:
+    runs-on: windows-2019
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     # Cancel any prior runs for a PR (but do not cancel master branch runs).
     - uses: n1hility/cancel-previous-runs@v2
@@ -82,7 +85,7 @@ jobs:
         set PATH=c:\projects\install\ninja;%PATH%
         7z x c:\projects\install\doxygen.zip -oc:\projects\install\doxygen > nul
         set PATH=c:\projects\install\doxygen;%PATH%
-        call "C:/Program Files (x86)/Microsoft Visual Studio/2017/Enterprise/VC/Auxiliary/Build/vcvars32.bat"
+        call "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars32.bat"
         echo ------ Running suite ------
         echo PATH is "%PATH%"
         echo Running in directory "%CD%"
@@ -104,7 +107,7 @@ jobs:
           on ${{github.event_name}} at ${{github.ref}}
         body: |
           Github Actions CI workflow run FAILED!
-          Workflow: ${{github.workflow}}/vs2017-32
+          Workflow: ${{github.workflow}}/vs2019-32
           Repository: ${{github.repository}}
           Branch ref: ${{github.ref}}
           SHA: ${{github.sha}}
@@ -116,12 +119,14 @@ jobs:
         from: Github Action CI
 
   ###########################################################################
-  # 64-bit VS2017 and tests:
-  vs2017-64:
-    runs-on: windows-2016
+  # 64-bit VS2019 and tests:
+  vs2019-64:
+    runs-on: windows-2019
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     # Cancel any prior runs for a PR (but do not cancel master branch runs).
     - uses: n1hility/cancel-previous-runs@v2
@@ -147,7 +152,7 @@ jobs:
         set PATH=c:\projects\install\ninja;%PATH%
         7z x c:\projects\install\doxygen.zip -oc:\projects\install\doxygen > nul
         set PATH=c:\projects\install\doxygen;%PATH%
-        call "C:/Program Files (x86)/Microsoft Visual Studio/2017/Enterprise/VC/Auxiliary/Build/vcvars32.bat"
+        call "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars32.bat"
         echo ------ Running suite ------
         echo PATH is "%PATH%"
         echo Running in directory "%CD%"
@@ -169,7 +174,7 @@ jobs:
           on ${{github.event_name}} at ${{github.ref}}
         body: |
           Github Actions CI workflow run FAILED!
-          Workflow: ${{github.workflow}}/vs2017-64
+          Workflow: ${{github.workflow}}/vs2019-64
           Repository: ${{github.repository}}
           Branch ref: ${{github.ref}}
           SHA: ${{github.sha}}
@@ -181,12 +186,14 @@ jobs:
         from: Github Action CI
 
   ###########################################################################
-  # 32-bit and 64-bit VS2017 release builds:
-  vs2017-builds:
-    runs-on: windows-2016
+  # 32-bit and 64-bit VS2019 release builds:
+  vs2019-builds:
+    runs-on: windows-2019
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     # Cancel any prior runs for a PR (but do not cancel master branch runs).
     - uses: n1hility/cancel-previous-runs@v2
@@ -212,7 +219,7 @@ jobs:
         set PATH=c:\projects\install\ninja;%PATH%
         7z x c:\projects\install\doxygen.zip -oc:\projects\install\doxygen > nul
         set PATH=c:\projects\install\doxygen;%PATH%
-        call "C:/Program Files (x86)/Microsoft Visual Studio/2017/Enterprise/VC/Auxiliary/Build/vcvars32.bat"
+        call "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars32.bat"
         echo ------ Running suite ------
         echo PATH is "%PATH%"
         echo Running in directory "%CD%"
@@ -234,7 +241,7 @@ jobs:
           on ${{github.event_name}} at ${{github.ref}}
         body: |
           Github Actions CI workflow run FAILED!
-          Workflow: ${{github.workflow}}/vs2017-builds
+          Workflow: ${{github.workflow}}/vs2019-builds
           Repository: ${{github.repository}}
           Branch ref: ${{github.ref}}
           SHA: ${{github.sha}}

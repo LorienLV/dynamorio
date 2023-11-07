@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2003-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -1115,25 +1115,28 @@ options_enable_code_api_dependences(options_t *options)
     if (!options->code_api)
         return;
 
-    /* PR 202669: larger stack size since we're saving a 512-byte
-     * buffer on the stack when saving fp state.
-     * Also, C++ RTL initialization (even when a C++
-     * client does little else) can take a lot of stack space.
-     * Furthermore, dbghelp.dll usage via drsyms has been observed
-     * to require 36KB, which is already beyond the minimum to
-     * share gencode in the same 64K alloc as the stack.
-     *
-     * XXX: if we raise this beyond 56KB we should adjust the
-     * logic in heap_mmap_reserve_post_stack() to handle sharing the
-     * tail end of a multi-64K-region stack.
-     */
-    options->stack_size = MAX(options->stack_size, 56 * 1024);
+        /* PR 202669: larger stack size since we're saving a 512-byte
+         * buffer on the stack when saving fp state.
+         * Also, C++ RTL initialization (even when a C++
+         * client does little else) can take a lot of stack space.
+         * Furthermore, dbghelp.dll usage via drsyms has been observed
+         * to require 36KB, which is already beyond the minimum to
+         * share gencode in the same 64K alloc as the stack.
+         *
+         * XXX: if we raise this beyond 56KB we should adjust the
+         * logic in heap_mmap_reserve_post_stack() to handle sharing the
+         * tail end of a multi-64K-region stack.
+         */
+#ifndef NOT_DYNAMORIO_CORE /* XXX: clumsy fix for Windows */
+    options->stack_size = MAX(options->stack_size, ALIGN_FORWARD(56 * 1024, PAGE_SIZE));
+#endif
 #ifdef UNIX
     /* We assume that clients avoid private library code, within reason, and
      * don't need as much space when handling signals.  We still raise the
      * limit a little while saving some per-thread space.
      */
-    options->signal_stack_size = MAX(options->signal_stack_size, 32 * 1024);
+    options->signal_stack_size =
+        MAX(options->signal_stack_size, ALIGN_FORWARD(32 * 1024, PAGE_SIZE));
 #endif
 
     /* For CI builds we'll disable elision by default since we
@@ -1230,9 +1233,9 @@ static bool
 check_option_compatibility_helper(int recurse_count)
 {
     bool changed_options = false;
-#    ifdef AARCH64
+#    if defined(AARCH64) || defined(RISCV64)
     if (!DYNAMO_OPTION(bb_prefixes)) {
-        USAGE_ERROR("bb_prefixes must be true on AArch64");
+        USAGE_ERROR("bb_prefixes must be true on AArch64/RISCV64");
         dynamo_options.bb_prefixes = true;
         changed_options = true;
     }
@@ -1345,6 +1348,15 @@ check_option_compatibility_helper(int recurse_count)
         dynamo_options.protect_mask &= ~SELFPROT_DCONTEXT;
         changed_options = true;
     }
+
+#    if defined(MACOS) && defined(AARCH64)
+    if (TEST(SELFPROT_GENCODE, dynamo_options.protect_mask)) {
+        USAGE_ERROR("memory protection changes incompatible with MAP_JIT");
+        dynamo_options.protect_mask &= ~SELFPROT_GENCODE;
+        changed_options = true;
+    }
+#    endif
+
 #    ifdef TRACE_HEAD_CACHE_INCR
     if (TESTANY(SELFPROT_LOCAL | SELFPROT_GLOBAL, dynamo_options.protect_mask)) {
         USAGE_ERROR("Cannot protect heap in a TRACE_HEAD_CACHE_INCR build");
@@ -1393,7 +1405,7 @@ check_option_compatibility_helper(int recurse_count)
         dynamo_options.shared_traces = false;
         changed_options = true;
     }
-#            ifdef X64
+#            if defined(X64) && !(defined(MACOS) && defined(AARCH64))
     /* PR 361894: we do not support x64 without TLS (xref PR 244737) */
 #                error X64 requires HAVE_TLS
 #            endif
@@ -2458,11 +2470,24 @@ options_init()
     return ret;
 }
 
-/* clean up dynamo options state */
+/* Clean up dynamo option state.  We can't clear/reset actual option values here,
+ * as those are used in other exit routines called later.  We have a separate
+ * options_detach() for that.
+ */
 void
 options_exit()
 {
     DELETE_READWRITE_LOCK(options_lock);
+}
+
+/* Reset dynamo options to defaults. */
+void
+options_detach()
+{
+    /* We do not use options_make_writable() as locks are already gone at this point. */
+    SELF_UNPROTECT_OPTIONS();
+    dynamo_options = default_options;
+    /* Not worth bothering to re-protect. */
 }
 
 /* this function returns holding the options lock */
@@ -2490,7 +2515,6 @@ int
 synchronize_dynamic_options()
 {
     int updated, retval;
-    bool compatibility_fixup = false;
 
     if (!dynamo_options.dynamic_options)
         return 0;
@@ -2538,7 +2562,10 @@ synchronize_dynamic_options()
     set_dynamo_options_defaults(&temp_options);
     set_dynamo_options(&temp_options, new_option_string);
     updated = update_dynamic_options(&dynamo_options, &temp_options);
-    compatibility_fixup = check_dynamic_option_compatibility();
+#    if defined(EXPOSE_INTERNAL_OPTIONS) && defined(INTERNAL)
+    bool compatibility_fixup =
+#    endif
+        check_dynamic_option_compatibility();
     /* d_r_option_string holds a copy of the last read registry value */
     strncpy(d_r_option_string, new_option_string,
             BUFFER_SIZE_ELEMENTS(d_r_option_string));

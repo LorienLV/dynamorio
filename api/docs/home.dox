@@ -1,5 +1,5 @@
 /* ******************************************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2022 Google, Inc.  All rights reserved.
  * ******************************************************************************/
 
 /*
@@ -62,11 +62,14 @@ DynamoRIO is the basis for some well-known external tools:
 - The [Arm Instruction Emulator (ArmIE)](https://developer.arm.com/tools-and-software/server-and-hpc/arm-architecture-tools/arm-instruction-emulator)
 - [WinAFL](https://github.com/googleprojectzero/winafl), the Windows fuzzing tool, as an instrumentation and code coverage engine
 - The fine-grained profiler for ARM [DrCCTProf](https://xl10.github.io/blog/drcctprof.html)
+- The portable and efficient framework for fine-grained value profilers [VClinic](https://github.com/VClinic/VClinic)
 
 Tools built on DynamoRIO and available in the [release package](@ref page_download) include:
 
 - The memory debugging tool [Dr. Memory](http://drmemory.org)
-- The tracing and analysis framework [drmemtrace](@ref page_drcachesim) with multiple tools that operate on both online (with multi-process support) and offline instruction and memory address traces:
+- The tracing and analysis framework [drmemtrace](@ref page_drcachesim) which can target instruction and memory address traces such as:
+  - [Google data center workload traces](@ref google_workload_traces) for public analysis in the [drmemtrace](@ref page_drcachesim) format.
+- The [drmemtrace](@ref page_drcachesim) framework includes multiple tools that operate on both online (with multi-process support) and offline instruction and memory address traces (such as the Google data center workload traces listed above):
   - The cache simulator [drcachesim](@ref sec_tool_cache_sim)
   - [TLB simulation](@ref sec_tool_TLB_sim)
   - [Reuse distance](@ref sec_tool_reuse_distance)
@@ -83,7 +86,7 @@ Tools built on DynamoRIO and available in the [release package](@ref page_downlo
 - The instruction tracing tool [instrace](https://github.com/DynamoRIO/dynamorio/blob/master/api/samples/instrace_x86.c) ([drmemtrace](@ref page_drcachesim)'s offline traces are faster with more surrounding infrastructure, but this is a simpler starting point for customized instruction tracing)
 - The basic block tracing tool [bbbuf](https://github.com/DynamoRIO/dynamorio/blob/master/api/samples/bbbuf.c)
 - The instruction counting tool [inscount](https://github.com/DynamoRIO/dynamorio/blob/master/api/samples/inscount.c)
-- The dynamic fuzz testing tool [Dr. Fuzz](http://drmemory.org/docs/page_drfuzz.html)
+- The dynamic fuzz testing tool [Dr. Fuzz](http://drmemory.org/page_drfuzz.html)
 - The disassembly tool [drdisas](@ref page_drdisas)
 - And more, including opcode counts, branch instrumentation, etc.: see \ref API_samples.
 

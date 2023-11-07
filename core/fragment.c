@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -2369,7 +2369,7 @@ fragment_create(dcontext_t *dcontext, app_pc tag, int body_size, int direct_exit
         if (!fragment_lookup_deleted(dcontext, tag) && !TEST(FRAG_COARSE_GRAIN, flags))
             STATS_INC(num_unique_fragments);
     });
-    if (d_r_stats != NULL &&
+    if (GLOBAL_STATS_ON() &&
         /* num_fragments is debug-only so we use the two release-build stats. */
         (uint)GLOBAL_STAT(num_bbs) + GLOBAL_STAT(num_traces) ==
             INTERNAL_OPTION(reset_at_fragment_count)) {
@@ -2901,7 +2901,6 @@ fragment_add(dcontext_t *dcontext, fragment_t *f)
 {
     per_thread_t *pt = (per_thread_t *)dcontext->fragment_field;
     fragment_table_t *table = GET_FTABLE(pt, f->flags);
-    bool resized;
     /* no future frags! */
     ASSERT(!TEST(FRAG_IS_FUTURE, f->flags));
 
@@ -2934,7 +2933,7 @@ fragment_add(dcontext_t *dcontext, fragment_t *f)
      * which is a perf hit.  Only the actual hashtable add is a "write".
      */
     TABLE_RWLOCK(table, write, lock);
-    resized = fragment_add_to_hashtable(dcontext, f, table);
+    fragment_add_to_hashtable(dcontext, f, table);
     TABLE_RWLOCK(table, write, unlock);
 
     /* After resizing a table that is targeted by inlined IBL heads
@@ -4098,7 +4097,7 @@ fragment_add_ibl_target_helper(dcontext_t *dcontext, fragment_t *f,
 }
 
 /* IBL targeted fragments per branch type */
-fragment_t *
+void
 fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag, ibl_branch_type_t branch_type)
 {
     per_thread_t *pt = (per_thread_t *)dcontext->fragment_field;
@@ -4136,7 +4135,7 @@ fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag, ibl_branch_type_t bran
                             TABLE_RWLOCK(ibl_table, read, unlock);
                             if (in_persisted_ibl) {
                                 d_r_mutex_unlock(&coarse->lock);
-                                return f;
+                                return;
                             }
                         }
                         d_r_mutex_unlock(&coarse->lock);
@@ -4203,7 +4202,7 @@ fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag, ibl_branch_type_t bran
         if (TEST(FRAG_TABLE_SHARED, ibl_table->table_flags) &&
             !TEST(FRAG_SHARED, f->flags)) {
             STATS_INC(num_ibt_shared_private_conflict);
-            return f;
+            return;
         }
 
         ASSERT(TEST(FRAG_IS_TRACE, f->flags) ==
@@ -4321,7 +4320,6 @@ fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag, ibl_branch_type_t bran
     }
 #endif /* HASHTABLE_STATISTICS */
     DOLOG(4, LOG_FRAGMENT, { dump_lookuptable_tls(dcontext); });
-    return f;
 }
 
 /**********************************************************************/
@@ -5668,7 +5666,7 @@ enter_nolinking(dcontext_t *dcontext, fragment_t *was_I_flushed, bool cache_tran
 
     /* now we act on pending actions that can only be done while nolinking
      * FIXME: optimization if add more triggers here: use a single
-     * master trigger as a first test to avoid testing all
+     * main trigger as a first test to avoid testing all
      * conditionals every time
      */
 
@@ -5836,7 +5834,7 @@ increment_global_flushtime()
     LOG(GLOBAL, LOG_VMAREAS, 2, "new flush timestamp: %u\n", flushtime_global);
 }
 
-/* The master flusher routines are split into 3:
+/* The main flusher routines are split into 3:
  *   stage1) flush_fragments_synch_unlink_priv
  *   stage2) flush_fragments_unlink_shared
  *   stage3) flush_fragments_end_synch
@@ -7098,7 +7096,7 @@ output_trace(dcontext_t *dcontext, per_thread_t *pt, fragment_t *f,
     char buf[MAXIMUM_PATH];
 #endif
     stats_int_t trace_num;
-    bool locked_vmareas = false, ok;
+    bool locked_vmareas = false;
     dr_isa_mode_t old_mode;
     ASSERT(SHOULD_OUTPUT_FRAGMENT(f->flags));
     ASSERT(TEST(FRAG_IS_TRACE, f->flags));
@@ -7111,7 +7109,8 @@ output_trace(dcontext_t *dcontext, per_thread_t *pt, fragment_t *f,
 
     LOG(THREAD, LOG_FRAGMENT, 4, "output_trace: F%d(" PFX ")\n", f->id, f->tag);
     /* Recreate in same mode as original fragment */
-    ok = dr_set_isa_mode(dcontext, FRAG_ISA_MODE(f->flags), &old_mode);
+    DEBUG_DECLARE(bool ok =)
+    dr_set_isa_mode(dcontext, FRAG_ISA_MODE(f->flags), &old_mode);
     ASSERT(ok);
 
     /* xref 8131/8202 if dynamo_resetting we don't need to grab the tracedump
@@ -8526,10 +8525,11 @@ fragment_coarse_entry_freeze(dcontext_t *dcontext, coarse_freeze_info_t *freeze_
     }
     if (pending->link_cti_opnd != NULL) {
         /* fix up incoming link */
-        cache_pc patch_tgt = (cache_pc)(
-            ((ptr_uint_t)(pending->entrance_stub ? freeze_info->stubs_start_pc
-                                                 : freeze_info->cache_start_pc)) +
-            tgt);
+        cache_pc patch_tgt =
+            (cache_pc)(((ptr_uint_t)(pending->entrance_stub
+                                         ? freeze_info->stubs_start_pc
+                                         : freeze_info->cache_start_pc)) +
+                       tgt);
         ASSERT(!pending->trace_head || pending->entrance_stub);
         LOG(THREAD, LOG_FRAGMENT, 4, "  patch link " PFX " => " PFX "." PFX "%s\n",
             pending->link_cti_opnd, pending->tag, patch_tgt,
@@ -8569,7 +8569,6 @@ fragment_coarse_unit_freeze(dcontext_t *dcontext, coarse_freeze_info_t *freeze_i
     pending_freeze_t pending_local;
     pending_freeze_t *pending;
     app_to_cache_t a2c;
-    coarse_table_t *frozen_htable;
     coarse_table_t *htable;
     cache_pc body_pc;
     uint i;
@@ -8586,7 +8585,8 @@ fragment_coarse_unit_freeze(dcontext_t *dcontext, coarse_freeze_info_t *freeze_i
             freeze_info->src_info->module);
         hashtable_coarse_study(dcontext, htable, 0 /*clean state*/);
     });
-    frozen_htable = (coarse_table_t *)freeze_info->dst_info->htable;
+    DEBUG_DECLARE(coarse_table_t *frozen_htable =
+                      (coarse_table_t *)freeze_info->dst_info->htable;)
     /* case 9900: rank order conflict with coarse_info_incoming_lock:
      * do not grab frozen_htable write lock: mark is_local instead and rely
      * on dynamo_all_threads_synched

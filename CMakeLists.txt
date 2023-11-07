@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2010-2021 Google, Inc.    All rights reserved.
+# Copyright (c) 2010-2023 Google, Inc.    All rights reserved.
 # Copyright (c) 2009-2010 VMware, Inc.    All rights reserved.
 # Copyright (c) 2018 Arm Limited          All rights reserved.
 # **********************************************************
@@ -120,6 +120,7 @@ endif ()
 
 include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
+include(CheckIncludeFile)
 
 ###########################################################################
 # utility functions
@@ -142,6 +143,12 @@ endif (UNIX)
 # configuration options
 
 # many are core-specific
+
+# whether this build of DynamoRIO is meant for distribution, in which case
+# glibc should not have any too-recent imports. See core/CMake_readelf.cmake
+# for more information. This is off by default, but gets set by
+# make/package.cmake.
+option(BUILD_PACKAGE "build DynamoRIO for packaging purposes by performing glibc checks" OFF)
 
 # configurations that also have defines
 option(DRSTATS_DEMO "build DRstats without the no-longer-supported Run, etc. controls" ON)
@@ -175,6 +182,9 @@ endif()
 # The target OS:
 if (APPLE)
   set(MACOS 1)
+  # Ensure our binaries can run on older OSX but only as far back as is
+  # officially supported by Apple.
+  set(OLDEST_OSX_SUPPPORTED "11.7")
 elseif (UNIX)
   set(LINUX 1)
 endif (APPLE)
@@ -210,14 +220,18 @@ endif ()
 # For cross-compilation this should still work as you're supposed to set this var.
 # X64 mean 64-bit generically, whether AMD64 or AARCH64.
 set(TARGET_ARCH "${CMAKE_SYSTEM_PROCESSOR}" CACHE STRING "Target architecture")
-if (TARGET_ARCH MATCHES "^arm")
-  set(ARM 1) # This means AArch32.
-  set(X64 OFF)
-  message(STATUS "Building for ARM")
-elseif (TARGET_ARCH MATCHES "^aarch64")
+if (TARGET_ARCH MATCHES "^arm64" OR TARGET_ARCH MATCHES "^aarch64")
   set(AARCH64 1)
   set(X64 1)
   message(STATUS "Building for AArch64")
+elseif (TARGET_ARCH MATCHES "^arm")
+  set(ARM 1) # This means AArch32.
+  set(X64 OFF)
+  message(STATUS "Building for ARM")
+elseif (TARGET_ARCH MATCHES "^riscv64")
+  set(RISCV64 1)
+  set(X64 1)
+  message(STATUS "Building for riscv64")
 else ()
   set(X86 1) # This means IA-32 or AMD64
   message(STATUS "Building for x86")
@@ -244,6 +258,8 @@ elseif (ARM)
   set(ARCH_NAME arm)
 elseif (AARCH64)
   set(ARCH_NAME aarch64)
+elseif (RISCV64)
+  set(ARCH_NAME riscv64)
 else ()
   message(FATAL_ERROR "Unknown architecture target")
 endif ()
@@ -257,16 +273,21 @@ endif ()
 
 # The execution architecture, which might differ from the target for building
 # an AArch64 decoder to execute on x86 machines (i#1684).
-if (CMAKE_SYSTEM_PROCESSOR MATCHES "^arm")
-  set(DR_HOST_ARM 1)
-  set(DR_HOST_ARCH_NAME "arm")
-  set(DR_HOST_AARCHXX 1)
-  set(DR_HOST_ARCH_NAME_SHARED aarchxx)
-elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^aarch64")
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "^aarch64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "^arm64")
   set(DR_HOST_AARCH64 1)
   set(DR_HOST_ARCH_NAME "aarch64")
   set(DR_HOST_AARCHXX 1)
   set(DR_HOST_ARCH_NAME_SHARED aarchxx)
+  set(DR_HOST_X64 1)
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^arm")
+  set(DR_HOST_ARM 1)
+  set(DR_HOST_ARCH_NAME "arm")
+  set(DR_HOST_AARCHXX 1)
+  set(DR_HOST_ARCH_NAME_SHARED aarchxx)
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^riscv64")
+  set(DR_HOST_RISCV64 1)
+  set(DR_HOST_ARCH_NAME "riscv64")
+  set(DR_HOST_ARCH_NAME_SHARED ${DR_HOST_ARCH_NAME})
   set(DR_HOST_X64 1)
 elseif (CMAKE_C_SIZEOF_DATA_PTR EQUAL 8)
   set(DR_HOST_X86 1)
@@ -292,6 +313,10 @@ if (NOT "${TARGET_ARCH}" STREQUAL "${CMAKE_SYSTEM_PROCESSOR}")
   if (ARM)
     # TODO i#1684: We don't have full support for targeting arm in i386 yet.
     message(FATAL_ERROR "Targeting ARM on i386 is not yet supported: i#1684.")
+  endif ()
+  if (RISCV64)
+    # TODO #1684: We don't have full support for targeting RISC-V in i386 yet.
+    message(FATAL_ERROR "Targeting riscv64 on i386 is not yet supported.")
   endif ()
 endif ()
 
@@ -541,9 +566,9 @@ else (EXISTS "${PROJECT_SOURCE_DIR}/.svn")
   endif (EXISTS "${PROJECT_SOURCE_DIR}/.git")
 endif (EXISTS "${PROJECT_SOURCE_DIR}/.svn")
 
-# N.B.: when updating this, update the default version in ci-package.yml.
-# We should find a way to share (xref i#1565).
-set(VERSION_NUMBER_DEFAULT "8.0.${VERSION_NUMBER_PATCHLEVEL}")
+# N.B.: When updating this, update all the default versions in ci-package.yml
+# and ci-docs.yml.  We should find a way to share (xref i#1565).
+set(VERSION_NUMBER_DEFAULT "10.0.${VERSION_NUMBER_PATCHLEVEL}")
 # do not store the default VERSION_NUMBER in the cache to prevent a stale one
 # from preventing future version updates in a pre-existing build dir
 set(VERSION_NUMBER "" CACHE STRING "Version number: leave empty for default")
@@ -586,7 +611,7 @@ set(INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 set(proc_supports_avx OFF)
 set(proc_supports_avx2 OFF)
 set(proc_supports_avx512 OFF)
-if (UNIX)
+if (X86 AND UNIX)
   set(CFLAGS_AVX "-mavx")
   # BMI2 instructions are typically also supported on AVX2 processors.
   set(CFLAGS_AVX2 "-mavx2 -mbmi2")
@@ -596,21 +621,44 @@ if (UNIX)
   check_avx512_processor_and_compiler_support(proc_supports_avx512)
 endif ()
 
+set(proc_supports_sve OFF)
+if (AARCH64 AND UNIX)
+  set(CFLAGS_SVE "-march=armv8-a+sve")
+  check_sve_processor_and_compiler_support(proc_supports_sve)
+endif ()
+
+# Ensure that _AMD64_ or _X86_ are defined on Microsoft Windows, as otherwise
+# um/winnt.h provided since Windows 10.0.22000 will error.
+if (NOT UNIX)
+  if (X64)
+    add_definitions(-D_AMD64_)
+  else (X64)
+    add_definitions(-D_X86_)
+  endif (X64)
+endif (NOT UNIX)
+if (UNIX)
+  # Ensure we can export dr_stat_syscall() from drlibc and get everyone to agree
+  # that struct stat64 is the stat struct.
+  add_definitions(-D_LARGEFILE64_SOURCE)
+endif ()
+
 # Set up assembly support and CMAKE_CPP.
 # Note that in cmake < 2.6.4, I had to fix a bug in
 # /usr/share/cmake/Modules/CMakeASMInformation.cmake
 # where @VAR@ expansion was used, which only works for configure_file()
 #   now fixed in CMake/Modules/CMakeASMInformation.cmake:1.5
 # See top of top-level CMakeLists.txt for our workaround.
+if (NOT UNIX)
+  get_filename_component(cl_path ${CMAKE_C_COMPILER} PATH)
+endif (NOT UNIX)
+
 set(cpp2asm_newline_script_path "${PROJECT_SOURCE_DIR}/make/CMake_asm.cmake")
 include(make/cpp2asm_support.cmake)
 if (UNIX)
   # We require gas >= 2.18.50 for --32, --64, and the new -msyntax=intel, etc.
-  # Since this is pretty recent we include a copy (built vs as old a glibc
-  # as was convenient)
   if (NOT CMAKE_ASM_SUPPORTS_INTEL_SYNTAX)
-    message("${CMAKE_ASM_COMPILER} too old: using ${PROJECT_SOURCE_DIR}/make/as-2.18.50")
-    set(CMAKE_ASM_COMPILER "${PROJECT_SOURCE_DIR}/make/as-2.18.50")
+    message(FATAL_ERROR
+      "${CMAKE_ASM_COMPILER} is too old and does not support -msyntax=intel")
   endif (NOT CMAKE_ASM_SUPPORTS_INTEL_SYNTAX)
 endif (UNIX)
 
@@ -649,40 +697,27 @@ else (UNIX)
     message(FATAL_ERROR "cl (Microsoft C++ compiler) is required to build")
   endif (NOT ${COMPILER_BASE_NAME} STREQUAL "cl")
 
-  # CMake older than 2.6.3 does not automatically look for ml or ml64
-  if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
-    # CMAKE_C_COMPILER doesn't have full path, unless user has in PATH
-    if (MSVC10)
-      get_filename_component(vc_dir [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\10.0\\Setup\\VC;ProductDir] REALPATH)
-    elseif (MSVC90)
-      get_filename_component(vc_dir [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\9.0\\Setup\\VC;ProductDir] REALPATH)
-    elseif (MSVC80)
-      get_filename_component(vc_dir [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\8.0\\Setup\\VC;ProductDir] REALPATH)
-    endif()
-    if (X64)
-      set(cl_path "${vc_dir}/bin/amd64")
-    else (X64)
-      set(cl_path "${vc_dir}/bin")
-    endif (X64)
-    # while we can get the cl path, we can't run cl b/c mspdb80.dll must
-    # be on the PATH: so even w/ VS generators we require PATH to be set.
-    if ("${CMAKE_C_COMPILER}" STREQUAL "cl")
-      set(CMAKE_C_COMPILER "${cl_path}/${CMAKE_C_COMPILER}")
-    endif ()
-  else ()
-    get_filename_component(cl_path ${CMAKE_C_COMPILER} PATH)
-  endif ()
-
   # cmake has CMAKE_RC_COMPILER, but no message compiler
   if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
-    # this path is only present for 2008+, but we currently require PATH to
-    # be set up anyway
-    get_filename_component(sdk_dir "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Microsoft SDKs\\Windows;CurrentInstallFolder]" REALPATH)
-    if (X64)
-      set(sdk_bindir "${sdk_dir}/bin/x64")
-    else (X64)
-      set(sdk_bindir "${sdk_dir}/bin")
-    endif (X64)
+    # First checks for the Windows SDK through Windows Kits.
+    get_filename_component(kits_dir "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots;KitsRoot10]" REALPATH)
+
+    if (EXISTS ${kits_dir})
+      if (X64)
+        set(sdk_bindir "${kits_dir}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64")
+      else (X64)
+        set(sdk_bindir "${kits_dir}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x86")
+      endif (X64)
+    else (EXISTS ${kits_dir})
+      # this path is only present for 2008+, but we currently require PATH to
+      # be set up anyway
+      get_filename_component(sdk_dir "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Microsoft SDKs\\Windows;CurrentInstallFolder]" REALPATH)
+      if (X64)
+        set(sdk_bindir "${sdk_dir}/bin/x64")
+      else (X64)
+        set(sdk_bindir "${sdk_dir}/bin")
+      endif (X64)
+    endif (EXISTS ${kits_dir})
   endif ()
   if (NOT ("${CMAKE_GENERATOR}" MATCHES "MSYS Makefiles"))
     # For MinGW (MSYS Makefiles) we do not have a message compiler.
@@ -767,6 +802,9 @@ if (UNIX)
   set(BASE_CONLY_FLAGS "${BASE_CONLY_FLAGS} -std=gnu99")
   # disable strict aliasing opt in gcc 3.3.3 -- gives warnings and makes bad assumptions
   set(BASE_CFLAGS "${BASE_CFLAGS} -fno-strict-aliasing")
+  # Ensure DR is interoperable with other toolchains: do not assume char is signed
+  # (see i#1034 where this caused problems in the past).
+  set(BASE_CFLAGS "${BASE_CFLAGS} -funsigned-char")
   # Ubuntu defaults to -fstack-protector these days, which depends on app TLS.
   CHECK_C_COMPILER_FLAG("-fno-stack-protector" no_stack_protector_avail)
   if (no_stack_protector_avail)
@@ -777,7 +815,8 @@ if (UNIX)
   if (suggest_override_avail)
     set(BASE_CXXONLY_FLAGS "${BASE_CXXONLY_FLAGS} -Wsuggest-override")
   endif ()
-  # now that the user must set non-default -mNN we don't nec. need these:
+  # Try to support users setting -m32 in CMAKE_C_FLAGS rather than the
+  # CFLAGS env var.
   if (X86)
     if (X64)
       set(BASE_CFLAGS "-m64 ${BASE_CFLAGS}")
@@ -790,7 +829,14 @@ if (UNIX)
     # i#1551: add necessary flags for ARM build.
     if (X64)
     else (X64)
-      set(BASE_CFLAGS "-mthumb -march=armv7-a ${BASE_CFLAGS}")
+      # On newer gcc versions such as 11.2 we need an explicit +fp to denote our
+      # gnueablihf hardware-fp-capabilities target.
+      CHECK_C_COMPILER_FLAG("-march=armv7-a+fp" armv7_fp_available)
+      if (armv7_fp_available)
+        set(BASE_CFLAGS "-mthumb -march=armv7-a+fp ${BASE_CFLAGS}")
+      else ()
+        set(BASE_CFLAGS "-mthumb -march=armv7-a ${BASE_CFLAGS}")
+      endif ()
       set(LD_FLAGS "-marmelf_linux_eabi")
       if (ANDROID OR CMAKE_C_LIBRARY_ARCHITECTURE MATCHES "gnueabi$")
         # We use eabihf by default for ARM build.
@@ -805,12 +851,7 @@ if (UNIX)
     endif (X64)
   endif ()
   if (APPLE AND CMAKE_COMPILER_IS_CLANG)
-    # Ensure our binaries can run on older OSX
-    # We're building our release package on 10.14, and that XCode does not
-    # supply C++ libraries for below 10.9, causing drcachesim to fail to build.
-    # Thus we have abandoned support for below 10.9.
-    # If this is updated, update drcachesim's as well.
-    set(BASE_CFLAGS "${BASE_CFLAGS} -mmacosx-version-min=10.9")
+    set(BASE_CFLAGS "${BASE_CFLAGS} -mmacosx-version-min=${OLDEST_OSX_SUPPPORTED}")
   endif ()
   if (APPLE)
     set(ld_entry_flag "-e")
@@ -818,7 +859,7 @@ if (UNIX)
     set(ld_entry_flag "--entry")
   endif ()
   # there's no cmake warning control so we hardcode it
-  set(WARN "-Wall -Werror -Wwrite-strings")
+  set(WARN "-Wall -Werror -Wwrite-strings -Wvla")
   if (NOT CMAKE_COMPILER_IS_CLANG)
     # Old gcc's ignore unknown -W flags, but -Wall -Werror causes clang to
     # complain that it doesn't recognize it.
@@ -845,6 +886,12 @@ if (UNIX)
       set(WARN "${WARN} -Wno-stringop-overflow")
     endif (stringop_overflow_avail)
     CHECK_C_COMPILER_FLAG("-Wtype-limits" HAVE_TYPELIMITS_CONTROL)
+    CHECK_C_COMPILER_FLAG("-Wdangling-pointer" dangling_pointer_avail)
+    if (dangling_pointer_avail)
+      # XXX i#6337: It is difficult to rewrite the TRY macros to avoid this gcc
+      # warning, which is innocuous, so we disable.
+      set(WARN "${WARN} -Wno-dangling-pointer")
+    endif ()
   else (NOT CMAKE_COMPILER_IS_CLANG)
     # clang turns off color when it's writing to a pipe, but the user may still
     # wish to force color if it eventually goes to a terminal.
@@ -1015,6 +1062,9 @@ if (UNIX)
     set(HAVE_FVISIBILITY ON)
   endif (VISIBILITY)
 
+  # Check for -fno-sanitize=null
+  CHECK_C_COMPILER_FLAG("-fno-sanitize=null" HAVE_FNOSANITIZE_NULL)
+
   if (APPLE OR LINKER_IS_GNU_GOLD)
     # XXX: for macos, currently assuming using xcode toolchain.
     set(ld_script_option "")
@@ -1157,16 +1207,16 @@ endif (UNIX)
 #   Release => -O3 -NDEBUG
 # Right now we only support gcc and cl but could change in future
 if (DEBUG)
-  set(CMAKE_C_FLAGS "${BASE_CFLAGS} ${BASE_CONLY_FLAGS} ${DBG} ${DBG_OPT}")
-  set(CMAKE_CXX_FLAGS "${BASE_CFLAGS} ${BASE_CXXONLY_FLAGS} ${DBG} ${DBG_OPT}")
+  set(CMAKE_C_FLAGS "${BASE_CFLAGS} ${BASE_CONLY_FLAGS} ${DBG} ${DBG_OPT} $ENV{CFLAGS}")
+  set(CMAKE_CXX_FLAGS "${BASE_CFLAGS} ${BASE_CXXONLY_FLAGS} ${DBG} ${DBG_OPT} $ENV{CXXFLAGS}")
 else (DEBUG)
   if (CALLPROF)
     # no opts -- we need to avoid messing up call frame walking
     # FIXME: just disable frame ptr elim opt: but /Oy- ran into some issues
     set (OPT "")
   endif (CALLPROF)
-  set(CMAKE_C_FLAGS "${BASE_CFLAGS} ${BASE_CONLY_FLAGS} ${OPT}")
-  set(CMAKE_CXX_FLAGS "${BASE_CFLAGS} ${BASE_CXXONLY_FLAGS} ${OPT}")
+  set(CMAKE_C_FLAGS "${BASE_CFLAGS} ${BASE_CONLY_FLAGS} ${OPT} $ENV{CFLAGS}")
+  set(CMAKE_CXX_FLAGS "${BASE_CFLAGS} ${BASE_CXXONLY_FLAGS} ${OPT} $ENV{CXXFLAGS}")
 endif (DEBUG)
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LINK_EXTRA_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${LINK_EXTRA_FLAGS}")
@@ -1190,6 +1240,29 @@ if (DR_HOST_AARCH64)
 else ()
   set(HAVE_HALF_FLOAT OFF)
 endif ()
+
+set(BUILD_PT_TRACER OFF)
+set(BUILD_PT_POST_PROCESSOR OFF)
+set(proc_supports_pt OFF)
+# Right now we only build PT related libraries on Linux x86_64.
+if (LINUX AND X86 AND X64)
+  # We will always build the PT tracer on Linux X86_64 no matter whether the system
+  # supports PT, because users may want to use the built binaries on a different system
+  # that does not support PT itself.
+  set(BUILD_PT_TRACER ON)
+  # Check if the building machine supports Intel PT. This function only checks if
+  # PT-related tests need to be built. PT-capable binaries can be built on any system.
+  check_intel_pt_support(proc_supports_pt)
+  # libdrpt2ir and drpt2trace depend on libipt. If the libipt submodule is not
+  # initialized, cmake will report a warning here.
+  if (EXISTS "${PROJECT_SOURCE_DIR}/third_party/libipt/.git" )
+    set(BUILD_PT_POST_PROCESSOR ON)
+  else ()
+    message(STATUS "libipt submodule is not initialized. libdrpt2ir and drpt2trace will not be built.")
+  endif ()
+else (LINUX AND X86 AND X64)
+  message(STATUS "PT related libraries only supported on Linux x86_64")
+endif (LINUX AND X86 AND X64)
 
 ###########################################################################
 
@@ -1308,15 +1381,8 @@ string(REGEX REPLACE
 math(EXPR VERSION_NUMBER_INTEGER
   "${VERSION_NUMBER_MAJOR}*100 + ${VERSION_NUMBER_MINOR}")
 
-# Every release since has had minor compat breakages.
-# 7.92 broke backcompat by changing 32-bit stack alignment to 16.
-# 7.91 broke backcompat by adding a field to instr_t .
-# 7.90 broke backcompat in DR_REG_ enums and OPSZ_ enums.
-# 6.0 broke backcompat in Linux injection, mod load event, etc.
-# 5.0 broke backcompat in drsyms and xmm opnd sizes
-# 4.1 broke backcompat in drsyms + 64-bit core (opcodes + reachability)
-# 4.0 broke backcompat in drmgr, drsyms, drinjectlib, and dr_get_milliseconds()
-set(OLDEST_COMPATIBLE_VERSION_DEFAULT "792")
+# Every release since has had minor compat breakages: see api/docs/release.dox.
+set(OLDEST_COMPATIBLE_VERSION_DEFAULT "1000")
 set(OLDEST_COMPATIBLE_VERSION "" CACHE STRING
   "Oldest compatible version: leave empty for default")
 if ("${OLDEST_COMPATIBLE_VERSION}" STREQUAL "")
@@ -1438,36 +1504,37 @@ endmacro()
 # tests in our suite.
 # The system dbghelp pre-Vista is too old, so we copy one from VS.
 # We locate it here for use in both subdirs.
+# We just try all variants that we can to avoid the complexities of which
+# versions are in "Program Files" vs "Program Files (x86)".
+set(PROGFILES "$ENV{PROGRAMW6432}")
+set(PROGFILES32 "$ENV{ProgramFiles\(x86\)}")
+if ("${PROGFILES}" STREQUAL "")
+  set(PROGFILES "$ENV{PROGRAMFILES}")
+endif ()
 if (X64)
-  set(PROGFILES "$ENV{PROGRAMW6432}") # cmake is 32-bit
-  set(PROGFILES32 "$ENV{ProgramFiles\(x86\)}")
-  if ("${PROGFILES32}" STREQUAL "")
-    set(PROGFILES32 "$ENV{PROGRAMFILES}")
-  endif ()
   set(ARCH_SFX "x64")
 else (X64)
-  set(PROGFILES "$ENV{PROGRAMFILES}")
-  set(PROGFILES32 "$ENV{PROGRAMFILES}")
   set(ARCH_SFX "x86")
 endif (X64)
 set(dbghelp_paths
   "${PROGFILES32}/Microsoft Visual Studio/*/Professional/Common7/IDE/Remote Debugger/${ARCH_SFX}/dbghelp.dll"
+  "${PROGFILES}/Microsoft Visual Studio/*/Professional/Common7/IDE/Remote Debugger/${ARCH_SFX}/dbghelp.dll"
+  "${PROGFILES32}/Microsoft Visual Studio */Common7/IDE/Remote Debugger/${ARCH_SFX}/dbghelp.dll"
   "${PROGFILES}/Microsoft Visual Studio */Common7/IDE/Remote Debugger/${ARCH_SFX}/dbghelp.dll"
-  "${PROGFILES32}/Windows Kits/*/Debuggers/${ARCH_SFX}/dbghelp.dll")
+  "${PROGFILES32}/Microsoft Visual Studio */Common7/IDE/dbghelp.dll"
+  "${PROGFILES}/Microsoft Visual Studio */Common7/IDE/dbghelp.dll"
+  "${PROGFILES32}/Windows Kits/*/Debuggers/${ARCH_SFX}/dbghelp.dll"
+  "${PROGFILES}/Windows Kits/*/Debuggers/${ARCH_SFX}/dbghelp.dll")
+# Older DTFW installed into its own dir:
 if (X64)
   set(dbghelp_paths ${dbghelp_paths}
-    # For Visual Studio 2010+, x64 dbghelp.dll resides in Program
-    # Files (x86) rather than Program Files.
-    "${PROGFILES32}/Microsoft Visual Studio */Common7/IDE/Remote Debugger/${ARCH_SFX}/dbghelp.dll"
-    # Older DTFW installed into its own dir:
     "${PROGFILES}/Debugging Tools for Windows (x64)/dbghelp.dll")
-else (X64)
+else ()
   set(dbghelp_paths ${dbghelp_paths}
-    "${PROGFILES}/Microsoft Visual Studio */Common7/IDE/dbghelp.dll"
-    # Older DTFW installed into its own dir:
-    "${PROGFILES}/Debugging Tools for Windows/dbghelp.dll")
-endif (X64)
+  "${PROGFILES}/Debugging Tools for Windows/dbghelp.dll")
+endif ()
 file(GLOB dbghelp_loc ${dbghelp_paths})
+message(STATUS "For dbghelp, choosing among: ${dbghelp_loc}")
 if (dbghelp_loc)
   # i#1219: exclude VS2005 x64 dbghelp as it is buggy
   list(LENGTH dbghelp_loc dbghelp_max)
@@ -1549,9 +1616,9 @@ if (BUILD_CORE)
   add_subdirectory(core)
 endif (BUILD_CORE)
 
-if (BUILD_TOOLS OR BUILD_DRSTATS)
+if (BUILD_TOOLS OR BUILD_DRSTATS OR BUILD_CLIENTS)
   add_subdirectory(libutil)
-endif (BUILD_TOOLS OR BUILD_DRSTATS)
+endif (BUILD_TOOLS OR BUILD_DRSTATS OR BUILD_CLIENTS)
 
 if (BUILD_TOOLS)
   add_subdirectory(tools)
@@ -1688,6 +1755,8 @@ endif ()
 add_custom_target(api_headers)
 if (AARCH64)
   add_dependencies(api_headers gen_aarch64_codec gen_aarch64_opcodes)
+elseif(RISCV64)
+  add_dependencies(api_headers gen_riscv64_codec gen_riscv64_headers)
 endif()
 
 DR_export_header(${PROJECT_SOURCE_DIR}/core/lib/dr_app.h dr_app.h)
@@ -1735,11 +1804,48 @@ function (link_with_pthread target)
   endif ()
 endfunction ()
 
-# zlib and snappy are used for some clients/ and tests.
-find_package(ZLIB)
+function (mac_add_inc_and_lib header lib)
+  # Locate include and lib directories on MacOS.
+  # TODO: Write proper package for snappy and lz4 lookup.
+  find_path(INCLUDE_DIR ${header} HINTS /usr/local/include /opt/homebrew/include)
+  if (INCLUDE_DIR)
+    include_directories(${INCLUDE_DIR})
+  else ()
+    message(WARNING "Failed to locate header ${header}")
+  endif ()
+  find_path(LIB_DIR ${lib} HINTS /usr/local/lib /opt/homebrew/lib)
+  if (LIB_DIR)
+    link_directories(${LIB_DIR})
+  else ()
+    message(WARNING "Failed to locate lib ${lib}")
+  endif ()
+endfunction ()
+
+# zlib, snappy, and lz4 are used for some clients/ and tests.
+# TODO i#5767: Install an explicit zlib package on our Windows GA CI images
+# (this find_package finds a strawberry perl zlib which causes 32-bit build
+# and 64-bit private loader issues).
+if (WIN32 AND AUTOMATED_TESTING)
+  set(ZLIB_FOUND OFF)
+else ()
+  find_package(ZLIB)
+endif ()
 # On Ubuntu 14.10, 32-bit builds fail to link with -lsnappy, just ignore.
 if (UNIX AND X64)
   find_library(libsnappy snappy)
+  if (libsnappy)
+    message(STATUS "Found snappy: ${libsnappy}")
+    if (APPLE)
+      mac_add_inc_and_lib(snappy.h libsnappy.a)
+    endif ()
+  endif ()
+  find_library(liblz4 lz4)
+  if (liblz4)
+    message(STATUS "Found liblz4: ${liblz4}")
+    if (APPLE)
+      mac_add_inc_and_lib(lz4.h liblz4.a)
+    endif ()
+  endif ()
 endif ()
 
 if (BUILD_CLIENTS)

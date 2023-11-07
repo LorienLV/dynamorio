@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2001-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -112,18 +112,17 @@ static const uint BLOCK_SIZES[] = {
     /* 40 dbg / 36 rel: */
     ALIGN_FORWARD(sizeof(fragment_t) + sizeof(indirect_linkstub_t), HEAP_ALIGNMENT),
 #if defined(X64)
-    sizeof(instr_t), /* 104 x64 */
 #    ifdef DEBUG
     sizeof(fragment_t) + sizeof(direct_linkstub_t) +
         sizeof(cbr_fallthrough_linkstub_t), /* 112 dbg x64 / 104 rel x64 */
 #    else
-/* release == instr_t */
+    sizeof(instr_t), /* 112 x64 */
 #    endif
 #else
     sizeof(fragment_t) + sizeof(direct_linkstub_t) +
         sizeof(cbr_fallthrough_linkstub_t), /* 60 dbg / 56 rel */
 #    ifndef DEBUG
-    sizeof(instr_t),                        /* 68 */
+    sizeof(instr_t),                        /* 72 */
 #    endif
 #endif
     /* we keep this bucket even though only 10% or so of normal bbs
@@ -1193,6 +1192,10 @@ vmheap_for_which(which_vmm_t which)
 byte *
 vmcode_get_writable_addr(byte *exec_addr)
 {
+    /* XXX i#5383: Audit these calls and ensure they cover all scenarios, are placed
+     * at the most efficient level, and are always properly paired.
+     */
+    PTHREAD_JIT_WRITE();
     if (!DYNAMO_OPTION(satisfy_w_xor_x))
         return exec_addr;
     /* If we want this to be an assert instead to catch superfluous calls, we'll need
@@ -1498,18 +1501,32 @@ at_reset_at_vmm_limit(vm_heap_t *vmh)
 }
 
 static void
-reached_beyond_vmm(void)
+reached_beyond_vmm(which_vmm_t which)
 {
     DODEBUG(ever_beyond_vmm = true;);
-    if (DYNAMO_OPTION(satisfy_w_xor_x)) {
+    /* Stats can be very useful to diagnose why we hit OOM. */
+    if (INTERNAL_OPTION(rstats_to_stderr))
+        dump_global_rstats_to_stderr();
+    char message[256];
+    if (DYNAMO_OPTION(satisfy_w_xor_x) &&
+        (TEST(VMM_REACHABLE, which) || REACHABLE_HEAP())) {
         /* We do not bother to try to mirror separate from-OS allocs: the user
          * should set -vm_size 2G instead and take the rip-rel mangling hit
          * (see i#3570).
          */
-        REPORT_FATAL_ERROR_AND_EXIT(
-            OUT_OF_VMM_CANNOT_USE_OS, 3, get_application_name(), get_application_pid(),
-            "-satisfy_w_xor_x requires VMM memory: try '-vm_size 2G'");
+        snprintf(
+            message, BUFFER_SIZE_ELEMENTS(message),
+            "Alloc type: 0x%x.  -satisfy_w_xor_x requires VMM memory: try '-vm_size 2G'",
+            which);
+        NULL_TERMINATE_BUFFER(message);
+        REPORT_FATAL_ERROR_AND_EXIT(OUT_OF_VMM_CANNOT_USE_OS, 3, get_application_name(),
+                                    get_application_pid(), message);
         ASSERT_NOT_REACHED();
+    } else {
+        snprintf(message, BUFFER_SIZE_ELEMENTS(message), "Alloc type: 0x%x.", which);
+        NULL_TERMINATE_BUFFER(message);
+        SYSLOG(SYSLOG_WARNING, OUT_OF_VMM_CANNOT_USE_OS, 3, get_application_name(),
+               get_application_pid(), message);
     }
 }
 
@@ -1566,7 +1583,7 @@ vmm_heap_reserve(size_t size, heap_error_code_t *error_code, bool executable,
                 /* FIXME - for our testing would be nice to have some release build
                  * notification of this ... */
             });
-            reached_beyond_vmm();
+            reached_beyond_vmm(which);
 #ifdef X64
             if (TEST(VMM_REACHABLE, which) || REACHABLE_HEAP()) {
                 /* PR 215395, make sure allocation satisfies heap reachability
@@ -1652,7 +1669,7 @@ vmm_heap_reserve(size_t size, heap_error_code_t *error_code, bool executable,
         });
     }
     /* if we fail to allocate from our reservation we fall back to the OS */
-    reached_beyond_vmm();
+    reached_beyond_vmm(which);
 #ifdef X64
     if (TEST(VMM_REACHABLE, which) || REACHABLE_HEAP()) {
         /* PR 215395, make sure allocation satisfies heap reachability contraints */
@@ -2158,7 +2175,7 @@ vmm_heap_fork_init(dcontext_t *dcontext)
      * os_delete_memory_file(). This may not work on Windows if that function needs to do
      * more.
      */
-    os_close(old_fd);
+    os_close_protected(old_fd);
     return;
 
 vmm_heap_fork_init_failed:
@@ -2223,7 +2240,7 @@ void
 d_r_heap_init()
 {
     int i;
-    uint prev_sz = 0;
+    DEBUG_DECLARE(uint prev_sz = 0;)
 
     LOG(GLOBAL, LOG_TOP | LOG_HEAP, 2, "Heap bucket sizes are:\n");
     /* make sure we'll preserve alignment */
@@ -2235,7 +2252,7 @@ d_r_heap_init()
         ASSERT(BLOCK_SIZES[i] > prev_sz);
         /* we assume all of our heap allocs are aligned */
         ASSERT(i == BLOCK_TYPES - 1 || ALIGNED(BLOCK_SIZES[i], HEAP_ALIGNMENT));
-        prev_sz = BLOCK_SIZES[i];
+        DODEBUG(prev_sz = BLOCK_SIZES[i];);
         LOG(GLOBAL, LOG_TOP | LOG_HEAP, 2, "\t%d bytes\n", BLOCK_SIZES[i]);
     }
 
@@ -2437,7 +2454,7 @@ heap_low_on_memory()
 {
     /* free some memory! */
     heap_unit_t *u, *next_u;
-    size_t freed = 0;
+    DEBUG_DECLARE(size_t freed = 0;)
     LOG(GLOBAL, LOG_CACHE | LOG_STATS, 1,
         "heap_low_on_memory: about to free dead list units\n");
     /* WARNING: this routine is called at arbitrary allocation failure points,
@@ -2455,7 +2472,7 @@ heap_low_on_memory()
     u = heapmgt->heap.dead;
     while (u != NULL) {
         next_u = u->next_global;
-        freed += UNIT_COMMIT_SIZE(u);
+        DODEBUG(freed += UNIT_COMMIT_SIZE(u););
         /* FIXME: if out of committed pages only, could keep our reservations */
         LOG(GLOBAL, LOG_HEAP, 1, "\tfreeing dead unit " PFX "-" PFX " [-" PFX "]\n", u,
             UNIT_COMMIT_END(u), UNIT_RESERVED_END(u));
@@ -3537,7 +3554,9 @@ global_heap_alloc(size_t size HEAPACCT(which_heap_t which))
     if (heapmgt == &temp_heapmgt &&
         /* We prevent recrusion by checking for a field that heap_init writes. */
         !heapmgt->global_heap_writable) {
-        /* XXX: We have no control point to call standalone_exit(). */
+        /* TODO i#2499: We have no control point currently to call standalone_exit().
+         * We need to develop a solution with atexit() or ELF destructors or sthg.
+         */
         standalone_init();
     }
     p = common_global_heap_alloc(&heapmgt->global_units, size HEAPACCT(which));
@@ -3577,7 +3596,6 @@ static heap_unit_t *
 heap_create_unit(thread_units_t *tu, size_t size, bool must_be_new)
 {
     heap_unit_t *u = NULL, *dead = NULL, *prev_dead = NULL;
-    bool new_unit = false;
 
     /* we do not restrict size to unit max as we have to make larger-than-max
      * units for oversized requests
@@ -3627,7 +3645,6 @@ heap_create_unit(thread_units_t *tu, size_t size, bool must_be_new)
         u = (heap_unit_t *)get_guarded_real_memory(size, commit_size,
                                                    MEMPROT_READ | MEMPROT_WRITE, false,
                                                    true, NULL, tu->which _IF_DEBUG(""));
-        new_unit = true;
         /* FIXME: handle low memory conditions by freeing units, + fcache units? */
         ASSERT(u);
         LOG(GLOBAL, LOG_HEAP, 2, "New heap unit: " PFX "-" PFX "\n", u,
@@ -5152,7 +5169,7 @@ special_heap_init_internal(uint block_size, uint block_alignment, bool use_lock,
 
 #if defined(WINDOWS_PC_SAMPLE) && !defined(DEBUG)
     if (special_heap_profile_enabled()) {
-        /* Add to the global master list, which requires a lock */
+        /* Add to the global main list, which requires a lock */
         d_r_mutex_lock(&special_units_list_lock);
         su->next = special_units_list;
         special_units_list = su;
@@ -5328,7 +5345,7 @@ special_heap_exit(void *special)
         total_heap_used / 1024);
 #if defined(WINDOWS_PC_SAMPLE) && !defined(DEBUG)
     if (special_heap_profile_enabled()) {
-        /* Removed this special_units_t from the master list */
+        /* Removed this special_units_t from the main list */
         d_r_mutex_lock(&special_units_list_lock);
         if (special_units_list == su)
             special_units_list = su->next;

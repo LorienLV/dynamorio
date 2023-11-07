@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2020-2021 Google, Inc.  All rights reserved.
+# Copyright (c) 2020-2023 Google, Inc.  All rights reserved.
 # **********************************************************
 
 # Redistribution and use in source and binary forms, with or without
@@ -63,6 +63,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     - name: Fetch Sources
       run: |
@@ -71,14 +73,14 @@ jobs:
         # We do shallow clones and assume DrM will update its DR at least once
         # every 250 DR commits.
         git clone --depth=2 https://github.com/DynamoRIO/drmemory.git drmemory
-        cd drmemory && git submodule update --init --depth 250 && cd ..
+        cd drmemory && git submodule update --init --recursive --depth 250 && cd ..
 
     # Install needed packages.
     - name: Create Build Environment
       run: |
         sudo apt-get update
         sudo apt-get -y install doxygen vera++ cmake zlib1g-dev libsnappy-dev \
-          libunwind-dev
+          liblz4-dev libunwind-dev
 
     - name: Get Version
       id: version
@@ -88,7 +90,7 @@ jobs:
       # We only use a non-zero build # when making multiple manual builds in one day.
       run: |
         if test -z "${{ github.event.inputs.version }}"; then
-          export VERSION_NUMBER=8.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
+          export VERSION_NUMBER=10.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
         else
           export VERSION_NUMBER=${{ github.event.inputs.version }}
         fi

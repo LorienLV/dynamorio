@@ -80,6 +80,31 @@ if (AARCH64)
     ${aarch64_exported_opcodes} VERBATIM)
 endif ()
 
+if (RISCV64)
+  # Required for opcode_api.h and codec headers, which are auto-generated on RISC-V.
+  include(../make/CMake_riscv64_gen_codec.cmake)
+  add_custom_target(gen_riscv64_codec DEPENDS "${RISCV64_CODEC_GEN_SRCS}")
+  include_directories(BEFORE ${PROJECT_BINARY_DIR})
+  # Export the generated headers.  Use a custom target and command to avoid
+  # repeated re-copying (a POST_BUILD with copy_if_different doesn't seem to work how
+  # it should: it still runs the command every time, though it doesn't copy anything).
+  set(riscv64_exported_opcodes ${BUILD_INCLUDE}/dr_ir_opcodes_riscv64.h)
+  set(riscv64_exported_instr ${BUILD_INCLUDE}/dr_ir_macros_riscv64.h)
+  add_custom_target(gen_riscv64_headers DEPENDS
+                                          ${riscv64_exported_opcodes}
+                                          ${riscv64_exported_instr})
+  add_custom_command(OUTPUT ${riscv64_exported_opcodes}
+    DEPENDS ${PROJECT_BINARY_DIR}/opcode_api.h
+    COMMAND ${CMAKE_COMMAND}
+    ARGS -E copy ${PROJECT_BINARY_DIR}/opcode_api.h
+    ${riscv64_exported_opcodes} VERBATIM)
+  add_custom_command(OUTPUT ${riscv64_exported_instr}
+    DEPENDS ${PROJECT_BINARY_DIR}/instr_create_api.h
+    COMMAND ${CMAKE_COMMAND}
+    ARGS -E copy ${PROJECT_BINARY_DIR}/instr_create_api.h
+    ${riscv64_exported_instr} VERBATIM)
+endif ()
+
 set(asm_deps
   "${PROJECT_SOURCE_DIR}/core/arch/asm_defines.asm"
   "${PROJECT_BINARY_DIR}/configure.h")
@@ -143,6 +168,8 @@ endif ()
 add_gen_events_deps(drlibc)
 if (AARCH64)
   add_dependencies(drlibc gen_aarch64_codec)
+elseif (RISCV64)
+  add_dependencies(drlibc gen_riscv64_codec)
 endif (AARCH64)
 if (WIN32 AND "${CMAKE_GENERATOR}" MATCHES "Visual Studio")
   # for parallel build correctness we need a target dependence
@@ -274,6 +301,9 @@ elseif (AARCH64)
   set(DECODER_SRCS ${DECODER_SRCS}
     ir/${ARCH_NAME}/codec.c
     ir/${ARCH_NAME}/build_ldstex.c)
+elseif (RISCV64)
+  set(DECODER_SRCS ${DECODER_SRCS}
+    ir/${ARCH_NAME}/codec.c)
 endif ()
 
 set(ARCH_SRCS
@@ -362,7 +392,11 @@ if (UNIX)
     set(OS_SRCS ${OS_SRCS} unix/memcache.c)
     set(OS_SRCS ${OS_SRCS} unix/module_elf.c)
     set(OS_SRCS ${OS_SRCS} unix/ksynch_linux.c)
-    set(OS_SRCS ${OS_SRCS} unix/tls_linux_${ARCH_NAME_SHARED}.c)
+    if (ARM OR AARCH64 OR RISCV64)
+      set(OS_SRCS ${OS_SRCS} unix/tls_linux_risc.c)
+    else ()
+      set(OS_SRCS ${OS_SRCS} unix/tls_linux_${ARCH_NAME}.c)
+    endif ()
     set(OS_SRCS ${OS_SRCS} unix/signal_linux.c)
     set(OS_SRCS ${OS_SRCS} unix/signal_linux_${ARCH_NAME}.c)
     set(OS_SRCS ${OS_SRCS} unix/native_elf.c)
@@ -497,6 +531,8 @@ function (configure_core_lib target)
   add_gen_events_deps(${target})
   if (AARCH64)
     add_dependencies(${target} gen_aarch64_codec)
+  elseif (RISCV64)
+    add_dependencies(${target} gen_riscv64_codec)
   endif()
   if (WIN32)
     # Since we're forced to use link-line flags instead of target_link_libraries
@@ -661,7 +697,7 @@ if (UNIX)
         ARGS -D lib_fileloc=${CMAKE_CURRENT_BINARY_DIR}/${locvar_name}
              -D check_textrel=${check_textrel}
              -D check_deps=${check_deps}
-             -D check_libc=OFF
+             -D check_libc=${BUILD_PACKAGE}
              -D check_interp=ON
              -D READELF_EXECUTABLE=${READELF_EXECUTABLE}
              -P ${CMAKE_CURRENT_SOURCE_DIR}/CMake_readelf.cmake
@@ -757,7 +793,7 @@ else (UNIX)
   set_target_properties(dynamorio PROPERTIES LINK_FLAGS "${dynamorio_link_flags}")
 
   # ensure there are no dependencies other than ntdll
-  find_program(DUMPBIN_EXECUTABLE dumpbin.exe DOC "path to dumpbin.exe")
+  find_program(DUMPBIN_EXECUTABLE dumpbin.exe HINTS "${cl_path}" DOC "path to dumpbin.exe")
   if (DUMPBIN_EXECUTABLE)
     add_custom_command(TARGET dynamorio
       POST_BUILD
@@ -775,6 +811,11 @@ endif (UNIX)
 # DynamoRIO static core library
 
 # hide_symbols is only honored for UNIX.
+# i#3348, i#5574: Note that hide_symbols is not safe. It leads to confusing
+# behavior where different libraries may see different definitions of exported
+# symbols, without obeying WEAK. E.g. the weakly defined routines in drlibc will
+# not be overriden by their respective strong definitions in core DR, for the
+# callsites in drlibc itself.
 function (configure_static_core_lib name hide_symbols)
   add_library(${name} STATIC
     ${CORE_SRCS} ${ARCH_SRCS} ${OS_SRCS})
@@ -841,32 +882,29 @@ endfunction()
 
 # XXX i#1997: not fully supported on Mac yet
 if (NOT APPLE)
-  configure_static_core_lib(dynamorio_static ON)
-  if (UNIX AND BUILD_TESTS)
-    # Create a version without hidden symbols to support that model.
-    # The symbol hiding step is complex and for some toolchains it is simpler
-    # to avoid it and count on symbol names preventing collisions (i#3348).
-    configure_static_core_lib(dynamorio_static_nohide OFF)
-
-    if (LINUX AND READELF_EXECUTABLE)
-      # We already located readelf above for the shared lib.
-      # We also already created a loc.cmake file in configure_static_core_lib.
-      set(locvar_name dynamorio_static_nohide_loc)
-      add_custom_command(TARGET dynamorio_static_nohide
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND}
-        ARGS -D lib_fileloc=${CMAKE_CURRENT_BINARY_DIR}/${locvar_name}
-             -D READELF_EXECUTABLE=${READELF_EXECUTABLE}
-             -D CMAKE_SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}
-             -D X86=${X86}
-             -D X64=${X64}
-             -D DEBUG=${DEBUG}
-             -P ${CMAKE_CURRENT_SOURCE_DIR}/CMake_symbol_check.cmake
-        VERBATIM
-        )
-    endif ()
+  # We do not hide symbols while building dynamorio_static, because it is unsafe
+  # to do so. See comment at configure_static_core_lib for more details.
+  # There are downsides to not hiding symbols that we have to live with,
+  # including pushing our many global symbols into the app namespace. We have
+  # renamed some of the ones that are more likely to collide in #3348.
+  configure_static_core_lib(dynamorio_static OFF)
+  if (LINUX AND READELF_EXECUTABLE)
+    # We already located readelf above for the shared lib.
+    # We also already created a loc.cmake file in configure_static_core_lib.
+    set(locvar_name dynamorio_static_loc)
+    add_custom_command(TARGET dynamorio_static
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND}
+      ARGS -D lib_fileloc=${CMAKE_CURRENT_BINARY_DIR}/${locvar_name}
+           -D READELF_EXECUTABLE=${READELF_EXECUTABLE}
+           -D CMAKE_SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}
+           -D X86=${X86}
+           -D X64=${X64}
+           -D DEBUG=${DEBUG}
+           -P ${CMAKE_CURRENT_SOURCE_DIR}/CMake_symbol_check.cmake
+      VERBATIM
+      )
   endif ()
-
 endif (NOT APPLE)
 
 ###########################################################################
@@ -892,6 +930,8 @@ set_target_properties(${PRELOAD_NAME} PROPERTIES
 add_gen_events_deps(${PRELOAD_NAME})
 if (AARCH64)
   add_dependencies(${PRELOAD_NAME} gen_aarch64_codec)
+elseif (RISCV64)
+  add_dependencies(${PRELOAD_NAME} gen_riscv64_codec)
 endif()
 
 if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
@@ -931,7 +971,7 @@ if (UNIX)
       ARGS -D lib_fileloc=${CMAKE_CURRENT_BINARY_DIR}/${locvar_name}
            -D check_textrel=ON
            -D check_deps=OFF
-           -D check_libc=ON
+           -D check_libc=${BUILD_PACKAGE}
            -D check_interp=ON
            -D READELF_EXECUTABLE=${READELF_EXECUTABLE}
            -P ${CMAKE_CURRENT_SOURCE_DIR}/CMake_readelf.cmake
@@ -953,7 +993,7 @@ endif (UNIX)
 # Decoding library
 
 # static decoding library
-add_library(drdecode
+add_library(drdecode STATIC
   ${DECODER_SRCS}
   ir/decodelib.c
   string.c
@@ -968,6 +1008,8 @@ endif (UNIX)
 add_gen_events_deps(drdecode)
 if (AARCH64)
   add_dependencies(drdecode gen_aarch64_codec)
+elseif (RISCV64)
+  add_dependencies(drdecode gen_riscv64_codec)
 endif()
 target_link_libraries(drdecode drlibc)
 

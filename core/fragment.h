@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2012-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2012-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -138,6 +138,12 @@
 #define FRAG_TEMP_PRIVATE 0x2000000
 
 #define FRAG_TRACE_OUTPUT 0x4000000
+/* Used only during block building, which means there is no conflict with
+ * FRAG_TRACE_OUTPUT.
+ */
+#ifdef LINUX
+#    define FRAG_STARTS_RSEQ_REGION 0x4000000
+#endif
 
 #define FRAG_CBR_FALLTHROUGH_SHORT 0x8000000
 
@@ -209,15 +215,21 @@ frag_flags_from_isa_mode(dr_isa_mode_t mode)
         return FRAG_THUMB;
     ASSERT(mode == DR_ISA_ARM_A32);
     return 0;
+#elif defined(RISCV64)
+    ASSERT(mode == DR_ISA_RV64IMAFDC);
+    return 0;
 #endif
 }
 
 /* to save space size field is a ushort => maximum fragment size */
-#ifndef AARCH64
-enum { MAX_FRAGMENT_SIZE = USHRT_MAX };
-#else
+#ifdef AARCH64
 /* On AArch64, TBNZ/TBZ has a range of +/- 32 KiB. */
 enum { MAX_FRAGMENT_SIZE = 0x8000 };
+#elif defined(RISCV64)
+/* On RISCV64, direct branch has a range of +/- 4 KiB. */
+enum { MAX_FRAGMENT_SIZE = 0x1000 };
+#else
+enum { MAX_FRAGMENT_SIZE = USHRT_MAX };
 #endif
 
 /* fragment structure used for basic blocks and traces
@@ -416,7 +428,7 @@ typedef struct _fragment_entry_t {
 /* Flags stored in {fragment,ibl}_table_t->flags bitfield
  */
 /* Indicates that fragment entries are shared between multiple tables in an
- * inclusive hierarchical fashion, so only removal from the master table (which
+ * inclusive hierarchical fashion, so only removal from the main table (which
  * is not so marked) will result in fragment deletion. Used primarily for
  * IBL targeted tables
  */
@@ -741,7 +753,7 @@ fragment_shift_fcache_pointers(dcontext_t *dcontext, fragment_t *f, ssize_t shif
 void
 fragment_update_ibl_tables(dcontext_t *dcontext);
 
-fragment_t *
+void
 fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag, ibl_branch_type_t branch_type);
 
 /* future fragments */

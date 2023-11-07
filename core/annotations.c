@@ -1,5 +1,5 @@
 /* ******************************************************
- * Copyright (c) 2014-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2014-2023 Google, Inc.  All rights reserved.
  * ******************************************************/
 
 /*
@@ -41,8 +41,8 @@
 #ifdef ANNOTATIONS /* around whole file */
 
 #    if !(defined(WINDOWS) && defined(X64))
-#        include "../third_party/valgrind/valgrind.h"
-#        include "../third_party/valgrind/memcheck.h"
+#        include "valgrind.h"
+#        include "memcheck.h"
 #    endif
 
 /* Macros for identifying an annotation head and extracting the pointer to its name.
@@ -352,12 +352,13 @@ instrument_annotation(dcontext_t *dcontext, IN OUT app_pc *start_pc,
 #    endif
 
     instr_init(dcontext, &scratch);
-    TRY_EXCEPT(my_dcontext, { identify_annotation(dcontext, &layout, &scratch); },
-               { /* EXCEPT */
-                 LOG(THREAD, LOG_ANNOTATIONS, 2,
-                     "Failed to instrument annotation at " PFX "\n", *start_pc);
-                 /* layout.type is already ANNOTATION_TYPE_NONE */
-               });
+    TRY_EXCEPT(
+        my_dcontext, { identify_annotation(dcontext, &layout, &scratch); },
+        { /* EXCEPT */
+          LOG(THREAD, LOG_ANNOTATIONS, 2, "Failed to instrument annotation at " PFX "\n",
+              *start_pc);
+          /* layout.type is already ANNOTATION_TYPE_NONE */
+        });
     if (layout.type != ANNOTATION_TYPE_NONE) {
         LOG(GLOBAL, LOG_ANNOTATIONS, 2,
             "Decoded %s annotation %s. Next pc now " PFX ".\n",

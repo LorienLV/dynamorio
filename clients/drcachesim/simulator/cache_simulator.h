@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2015-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2015-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -36,13 +36,21 @@
 #ifndef _CACHE_SIMULATOR_H_
 #define _CACHE_SIMULATOR_H_ 1
 
+#include <limits.h>
+#include <stdint.h>
+
+#include <istream>
+#include <string>
 #include <unordered_map>
-#include "simulator.h"
+
+#include "cache.h"
 #include "cache_simulator_create.h"
 #include "cache_stats.h"
-#include "cache.h"
+#include "simulator.h"
 #include "snoop_filter.h"
-#include <limits.h>
+
+namespace dynamorio {
+namespace drmemtrace {
 
 enum class cache_split_t { DATA, INSTRUCTION };
 
@@ -74,7 +82,7 @@ public:
     bool
     print_results() override;
 
-    int_least64_t
+    int64_t
     get_cache_metric(metric_name_t metric, unsigned level, unsigned core = 0,
                      cache_split_t split = cache_split_t::DATA) const;
 
@@ -90,7 +98,7 @@ public:
 protected:
     // Create a cache_t object with a specific replacement policy.
     virtual cache_t *
-    create_cache(const std::string &policy);
+    create_cache(const std::string &name, const std::string &policy);
 
     cache_simulator_knobs_t knobs_;
 
@@ -115,5 +123,8 @@ protected:
 private:
     bool is_warmed_up_;
 };
+
+} // namespace drmemtrace
+} // namespace dynamorio
 
 #endif /* _CACHE_SIMULATOR_H_ */

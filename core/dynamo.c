@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -99,6 +99,11 @@ bool dynamo_heap_initialized = false;
 bool dynamo_started = false;
 bool automatic_startup = false;
 bool control_all_threads = false;
+/* On Windows we can't really tell attach apart from our default late
+ * injection, and we do see early threads in place which is the point of
+ * this flag: so we always set it.
+ */
+bool dynamo_control_via_attach = IF_WINDOWS_ELSE(true, false);
 #ifdef WINDOWS
 bool dr_early_injected = false;
 int dr_early_injected_location = INJECT_LOCATION_Invalid;
@@ -162,8 +167,8 @@ DECLARE_NEVERPROT_VAR(byte *exception_stack, NULL);
 START_DATA_SECTION(NEVER_PROTECTED_SECTION, "w");
 
 /* spinlock used in assembly trampolines when we can't spare registers for more */
-mutex_t initstack_mutex VAR_IN_SECTION(NEVER_PROTECTED_SECTION) =
-    INIT_SPINLOCK_FREE(initstack_mutex);
+mutex_t initstack_mutex IF_AARCH64(__attribute__((aligned(8))))
+    VAR_IN_SECTION(NEVER_PROTECTED_SECTION) = INIT_SPINLOCK_FREE(initstack_mutex);
 byte *initstack_app_xsp VAR_IN_SECTION(NEVER_PROTECTED_SECTION) = 0;
 /* keeps track of how many threads are in cleanup_and_terminate */
 volatile int exiting_thread_count VAR_IN_SECTION(NEVER_PROTECTED_SECTION) = 0;
@@ -1005,6 +1010,7 @@ standalone_exit(void)
     dynamo_initialized = false;
     dynamo_options_initialized = false;
     dynamo_heap_initialized = false;
+    options_detach();
 }
 
 /* Perform exit tasks that require full thread data structs, which we have
@@ -1099,21 +1105,20 @@ dynamo_shared_exit(thread_record_t *toexit /* must ==cur thread for Linux */
     loader_exit();
 
     if (toexit != NULL) {
-        /* free detaching thread's dcontext */
-#ifdef WINDOWS
-        /* If we use dynamo_thread_exit() when toexit is the current thread,
-         * it results in asserts in the win32.tls test, so we stick with this.
-         */
-        d_r_mutex_lock(&thread_initexit_lock);
-        dynamo_other_thread_exit(toexit, false);
-        d_r_mutex_unlock(&thread_initexit_lock);
-#else
-        /* On Linux, restoring segment registers can only be done
+        /* Free detaching thread's dcontext.
+         * Restoring the teb fields or segment registers can only be done
          * on the current thread, which must be toexit.
          */
+#ifdef WINDOWS
+        /* XXX i#5340: We used to go through dynamo_other_thread_exit() which rewinds
+         * the kstats stack as below.  To avoid a kstats assert on this new path we
+         * repeat it here but it seems like we shouldn't need it.
+         */
+        KSTOP_REWIND_DC(get_thread_private_dcontext(), thread_measured);
+        KSTART_DC(get_thread_private_dcontext(), thread_measured);
+#endif
         ASSERT(toexit->id == d_r_get_thread_id());
         dynamo_thread_exit();
-#endif
     }
 
     if (IF_WINDOWS_ELSE(!detach_stacked_callbacks, true)) {
@@ -1182,9 +1187,10 @@ dynamo_shared_exit(thread_record_t *toexit /* must ==cur thread for Linux */
     vmm_heap_exit();
     diagnost_exit();
     data_section_exit();
-    /* funny dependences: options exit just frees lock, not destroying
+    /* Funny dependences: options exit just frees lock, not destroying
      * any options that are needed for other exits, so do it prior to
-     * checking locks in debug build
+     * checking locks in debug build.  We have a separate options_detach()
+     * which resets options for re-attach.
      */
     options_exit();
     utils_exit();
@@ -1321,11 +1327,7 @@ dynamo_process_exit_cleanup(void)
 {
     /* CAUTION: this should only be invoked after all app threads have stopped */
     if (!dynamo_exited && !INTERNAL_OPTION(nullcalls)) {
-        dcontext_t *dcontext;
-
         APP_EXPORT_ASSERT(dynamo_initialized, "Improper DynamoRIO initialization");
-
-        dcontext = get_thread_private_dcontext();
 
         /* we deliberately do NOT clean up d_r_initstack (which was
          * allocated using a separate mmap and so is not part of some
@@ -2573,8 +2575,16 @@ dynamo_thread_exit_common(dcontext_t *dcontext, thread_id_t id,
      * This must be called after dynamo_thread_exit_pre_client where
      * we called event callbacks.
      */
-    if (!other_thread)
+    if (!other_thread) {
         dynamo_thread_not_under_dynamo(dcontext);
+#ifdef WINDOWS
+        /* We don't do this inside os_thread_not_under_dynamo b/c we do it in
+         * context switches.  os_loader_exit() will call this, but it has no
+         * dcontext, so it won't swap internal TEB fields.
+         */
+        swap_peb_pointer(dcontext, false /*to app*/);
+#endif
+    }
 
     /* We clean up priv libs prior to setting tls dc to NULL so we can use
      * TRY_EXCEPT when calling the priv lib entry routine
@@ -2621,7 +2631,7 @@ dynamo_thread_exit_common(dcontext_t *dcontext, thread_id_t id,
 #endif
 
 #ifdef DEBUG
-    if (dcontext->logfile != INVALID_FILE) {
+    if (dcontext->logfile != INVALID_FILE && dcontext->logfile != STDERR) {
         os_flush(dcontext->logfile);
         close_log_file(dcontext->logfile);
     }
@@ -2731,6 +2741,7 @@ dr_app_setup(void)
     if (DATASEC_WRITABLE(DATASEC_RARELY_PROT) == 0)
         SELF_UNPROTECT_DATASEC(DATASEC_RARELY_PROT);
     dr_api_entry = true;
+    dynamo_control_via_attach = true;
     res = dynamorio_app_init();
     /* For dr_api_entry, we do not install all our signal handlers during init (to avoid
      * races: i#2335): we delay until dr_app_start().  Plus the vsyscall hook is
@@ -2817,6 +2828,10 @@ dr_app_stop_and_cleanup_with_stats(dr_stats_t *drstats)
      * and we need to resolve the unbounded dr_app_stop() time.
      */
     if (dynamo_initialized && !dynamo_exited && !doing_detach) {
+#    ifdef WINDOWS
+        /* dynamo_thread_exit_common will later swap to app. */
+        swap_peb_pointer(get_thread_private_dcontext(), true /*to priv*/);
+#    endif
         detach_on_permanent_stack(true /*internal*/, true /*do cleanup*/, drstats);
     }
     /* the application regains control in here */
@@ -2915,6 +2930,9 @@ dynamorio_take_over_threads(dcontext_t *dcontext)
             os_thread_sleep(1);
     } while (found_threads && attempts < max_takeover_attempts);
     os_process_under_dynamorio_complete(dcontext);
+
+    instrument_post_attach_event();
+
     /* End the barrier to new threads. */
     signal_event(dr_attach_finished);
 

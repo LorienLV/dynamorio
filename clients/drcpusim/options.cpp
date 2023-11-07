@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2015-2017 Google, Inc.  All rights reserved.
+ * Copyright (c) 2015-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -35,6 +35,12 @@
 #include <string>
 #include "droption.h"
 #include "options.h"
+
+namespace dynamorio {
+namespace drcpusim {
+
+using ::dynamorio::droption::DROPTION_SCOPE_CLIENT;
+using ::dynamorio::droption::droption_t;
 
 #ifdef WINDOWS
 #    define IF_WINDOWS_ELSE(x, y) x
@@ -127,10 +133,13 @@ droption_t<bool> op_allow_prefetchw(
     "processors, while they do not officially support it, will turn it into a NOP. "
     "As it is commonly seen on Windows, by default drcpusim does not complain about it.");
 
-droption_t<std::string> op_blacklist(
-    DROPTION_SCOPE_CLIENT, "blacklist", IF_WINDOWS_ELSE("ntdll.dll", ""),
-    ":-separated list of libs to ignore.",
-    "The blacklist is a :-separated list of library names for which violations "
+droption_t<std::string> op_blocklist(
+    // We support the legacy name as an alias for compatibility.
+    // We explicitly specity the vector type to avoid ambiguity with iterators
+    // when we have just 2 elements in the list.
+    DROPTION_SCOPE_CLIENT, std::vector<std::string>({ "blocklist", "blacklist" }),
+    IF_WINDOWS_ELSE("ntdll.dll", ""), ":-separated list of libs to ignore.",
+    "The blocklist is a :-separated list of library names for which violations "
     "should not be reported.");
 
 droption_t<bool> op_ignore_all_libs(
@@ -142,3 +151,6 @@ droption_t<bool> op_ignore_all_libs(
 droption_t<unsigned int> op_verbose(DROPTION_SCOPE_CLIENT, "verbose", 0, 0, 64,
                                     "Verbosity level",
                                     "Verbosity level for notifications.");
+
+} // namespace drcpusim
+} // namespace dynamorio

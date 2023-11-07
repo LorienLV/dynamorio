@@ -1,5 +1,5 @@
 /* ******************************************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2011 Massachusetts Institute of Technology  All rights reserved.
  * Copyright (c) 2007-2010 VMware, Inc.  All rights reserved.
  * ******************************************************************************/
@@ -221,6 +221,12 @@ feature and is not yet as well-supported as launching a new process:
 bin32/drrun.exe -attach <notepad_pid> -c samples/bin32/bbsize.dll
 \endcode
 
+Then, you can also detach DynamoRIO from the process of \c notepad.exe
+without affecting the normal execution of \c notepad.exe.
+\code
+bin32/drconfig.exe -detach <notepad_pid>
+\endcode
+
 To use system-wide injection, allowing for an application to be run
 under DynamoRIO regardless of how it is invoked, configure the application
 first (-syswide_on requires administrative privileges):
@@ -376,9 +382,9 @@ than invoking the script directly:
 
 To \ref sec_comm "nudge" a process with pid \c targetpid running under
 DynamoRIO and pass argument "5" to the nudge callback, use the \c
-nudgeunix tool:
+drnudgeunix tool:
 \code
-bin32/nudgeunix -pid targetpid -client 0 5
+bin32/drnudgeunix -pid targetpid -client 0 5
 \endcode
 This will result in a nudge event with argument=5 delivered to the
 client callback registered with dr_register_nudge_event() in the
@@ -619,7 +625,7 @@ For more extensive actions on launching the tool, a custom front-end
 executable can be created that replaces \p drrun by using \p drinjectlib,
 \p drconfiglib, and \p drfrontendlib.  These three libraries facilitate
 creating cross-platform tools for configuring and launching applications
-under Dr. Memory.  For more information about the interfaces they provide,
+under DynamoRIO.  For more information about the interfaces they provide,
 see their header files: dr_inject.h, dr_config.h, dr_frontend.h.
 
 A custom front-end executable can be invoked via a \p drrun \p -t
@@ -728,6 +734,13 @@ are specified via \c drconfig, \c drrun, or dr_register_process().  See
    If a client changes application instructions after an inserted clean call,
    the client may need to reduce the -opt_cleancall level to preserve correct
    execution.
+   There are four optimization levels:
+   - 0: no optimization.
+   - 1: callee register usage analysis and optimization on context switch.
+   - 2: simple callee inline optimization, callee-save register analysis,
+        and aflags usage analysis on the instruction list to be inserted.
+   - 3: more aggressive, but potentially unsafe, optimizations.
+   By default, the clean call optimization level is 2.
    The clean call will only be optimized if it is a leaf function.
    Currently, the callee will be inlined only if it is small, has at most
    one argument, and has no control flow other than for the PIC base.
@@ -740,13 +753,6 @@ are specified via \c drconfig, \c drrun, or dr_register_process().  See
    logfile size significantly) and grep for
    "CLEANCALL" in the log file to retrieve the information
    about clean call optimization.
-   There are four optimization levels.
-   By default, the clean call optimization level is 2.
-   - 0: no optimization.
-   - 1: callee register usage analysis and optimization on context switch.
-   - 2: simple callee inline optimization, callee-save register analysis,
-        and aflags usage analysis on the instruction list to be inserted.
-   - 3: more aggressive, but potentially unsafe, optimizations.
 
  - \b -opt_speed: \anchor op_speed
    By default, DynamoRIO provides a more straightforward code stream to
@@ -918,6 +924,11 @@ they want to shrink memory usage
  - \b -syntax_arm: \anchor op_syntax_arm
     This option causes DynamoRIO to output all disassembly using standard
     ARM assembler syntax rather than the default show-implicit-operands
+    syntax.  This can also be set using disassemble_set_syntax().
+
+ - \b -syntax_riscv: \anchor op_syntax_riscv
+    This option causes DynamoRIO to output all disassembly using
+    RISC-V assembler syntax rather than the default show-implicit-operands
     syntax.  This can also be set using disassemble_set_syntax().
 
  - \b -disasm_mask:

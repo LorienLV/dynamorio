@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2007-2008 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -914,6 +914,59 @@ test_cti_prefixes(void *dc)
 }
 
 static void
+test_predicate(void *dc, byte *data, uint len, int opcode, dr_pred_type_t pred,
+               uint eflags)
+{
+    instr_t *instr = instr_create(dc);
+    byte *end = decode(dc, data, instr);
+    ASSERT(end == data + len);
+    ASSERT(instr_get_opcode(instr) == opcode);
+    ASSERT(instr_is_predicated(instr));
+    ASSERT(instr_get_predicate(instr) == pred);
+    ASSERT(instr_get_opcode_eflags(opcode) == eflags);
+    instr_destroy(dc, instr);
+}
+
+static void
+test_cti_predicates(void *dc)
+{
+    byte data[][16] = {
+        // 7e 10                jle    10
+        { 0x7e, 0x10 },
+        // 0f 84 99 00 00 00    je     403e08
+        { 0x0f, 0x84, 0x99, 0x00, 0x00, 0x00 },
+        // 0f 44 c2             cmovbe %edx,%eax
+        { 0x0f, 0x46, 0xc2 },
+    };
+    test_predicate(dc, data[0], 2, OP_jle_short, DR_PRED_LE,
+                   EFLAGS_READ_SF | EFLAGS_READ_OF | EFLAGS_READ_ZF);
+    test_predicate(dc, data[1], 6, OP_je, DR_PRED_EQ, EFLAGS_READ_ZF);
+    test_predicate(dc, data[2], 3, OP_cmovbe, DR_PRED_BE,
+                   EFLAGS_READ_CF | EFLAGS_READ_ZF);
+}
+
+static void
+test_rep_predicates(void *dc)
+{
+    byte data[][16] = {
+        // f3 6c                rep ins
+        { 0xf3, 0x6c },
+        // f3 a4                rep movs
+        { 0xf3, 0xa4 },
+        // f3 a6                rep cmps
+        { 0xf3, 0xa6 },
+        // f2 af                repne scas
+        { 0xf2, 0xaf },
+    };
+    test_predicate(dc, data[0], 2, OP_rep_ins, DR_PRED_COMPLEX, EFLAGS_READ_DF);
+    test_predicate(dc, data[1], 2, OP_rep_movs, DR_PRED_COMPLEX, EFLAGS_READ_DF);
+    test_predicate(dc, data[2], 2, OP_rep_cmps, DR_PRED_COMPLEX,
+                   EFLAGS_WRITE_6 | EFLAGS_READ_DF | EFLAGS_READ_ZF);
+    test_predicate(dc, data[3], 2, OP_repne_scas, DR_PRED_COMPLEX,
+                   EFLAGS_WRITE_6 | EFLAGS_READ_DF | EFLAGS_READ_ZF);
+}
+
+static void
 test_modrm16_helper(void *dc, reg_id_t base, reg_id_t scale, uint disp, uint len)
 {
     instr_t *instr;
@@ -998,6 +1051,21 @@ test_modrm16(void *dc)
     test_modrm16_helper(dc, DR_REG_DI, DR_REG_NULL, 0x80, 5);
     test_modrm16_helper(dc, DR_REG_BP, DR_REG_NULL, 0x80, 5);
     test_modrm16_helper(dc, DR_REG_BX, DR_REG_NULL, 0x80, 5);
+}
+
+/* Just check that decoding fails silently on invalid data. */
+static void
+test_modrm_invalid(void *dc)
+{
+/* Decoding succeeds on 32-bits. */
+#ifdef X64
+    /* Fuzzer-generated random data (i#5320). */
+    byte data[16] = { 0x62, 0x03, 0xa5, 0x62, 0x03, 0xa5 };
+    instr_t *instr = instr_create(dc);
+    byte *end = decode(dc, data, instr);
+    ASSERT(end == NULL);
+    instr_destroy(dc, instr);
+#endif
 }
 
 /* PR 215143: auto-magically add size prefixes */
@@ -1122,6 +1190,32 @@ test_size_changes(void *dc)
         opnd_create_base_disp(DR_REG_XSP, DR_REG_NULL, 0, 0, OPSZ_6));
     test_instr_encode_and_decode(dc, instr, 2, true /*src*/, 1, OPSZ_6, 6);
     ASSERT(buf[0] == 0x66); /* check for data prefix */
+
+#ifdef X64
+    /* i#5442 */
+    byte bytes_xchg_ax_r8w[] = { 0x66, 0x41, 0x90 };
+    byte bytes_repne_xchg_eax_r8d[] = { 0xf2, 0x41, 0x90 };
+    instr =
+        INSTR_CREATE_xchg(dc, opnd_create_reg(DR_REG_R8W), opnd_create_reg(DR_REG_AX));
+    test_instr_decode(dc, instr, bytes_xchg_ax_r8w, sizeof(bytes_xchg_ax_r8w), false);
+
+    instr =
+        INSTR_CREATE_xchg(dc, opnd_create_reg(DR_REG_R8D), opnd_create_reg(DR_REG_EAX));
+    test_instr_decode(dc, instr, bytes_repne_xchg_eax_r8d,
+                      sizeof(bytes_repne_xchg_eax_r8d), false);
+
+    instr =
+        INSTR_CREATE_xchg(dc, opnd_create_reg(DR_REG_R8W), opnd_create_reg(DR_REG_AX));
+    /* This really should encode to the three bytes above (see i#5446) */
+    test_instr_encode_and_decode(dc, instr, 4, true /*src*/, 1, OPSZ_2, 2);
+    assert(buf[0] == 0x66); /* check for data prefix */
+
+    instr =
+        INSTR_CREATE_xchg(dc, opnd_create_reg(DR_REG_EAX), opnd_create_reg(DR_REG_R8D));
+    /* This really should encode to two bytes (see i#5446) */
+    test_instr_encode_and_decode(dc, instr, 3, true /*src*/, 1, OPSZ_4, 4);
+    assert(buf[0] != 0x66); /* check for no data prefix */
+#endif
 }
 
 /* PR 332254: test xchg vs nop */
@@ -1280,6 +1374,179 @@ test_x64_inc(void *dc)
 }
 
 static void
+test_avx512_vnni_encoding(void *dc)
+{
+    /*
+     * These tests are taken from binutils-2.37.90/gas/testsuite/gas/i386/avx-vnni.{s,d}
+     * Each pair below differs only in assembler syntax so we took only 3 out of the 6
+     * tests below (x 4 for each opcode)
+     *
+     *   \mnemonic %xmm2, %xmm4, %xmm2
+     *   {evex} \mnemonic %xmm2, %xmm4, %xmm2
+     *
+     *   {vex}  \mnemonic %xmm2, %xmm4, %xmm2
+     *   {vex3} \mnemonic %xmm2, %xmm4, %xmm2
+     *
+     *   {vex}  \mnemonic (%ecx), %xmm4, %xmm2
+     *   {vex3} \mnemonic (%ecx), %xmm4, %xmm2
+     *
+     * +[a-f0-9]+:  62 f2 5d 08 50 d2     vpdpbusd %xmm2,%xmm4,%xmm2
+     * +[a-f0-9]+:  c4 e2 59 50 d2        \{vex\} vpdpbusd %xmm2,%xmm4,%xmm2
+     * +[a-f0-9]+:  c4 e2 59 50 11        \{vex\} vpdpbusd \(%ecx\),%xmm4,%xmm2
+     * +[a-f0-9]+:  62 f2 5d 08 52 d2     vpdpwssd %xmm2,%xmm4,%xmm2
+     * +[a-f0-9]+:  c4 e2 59 52 d2        \{vex\} vpdpwssd %xmm2,%xmm4,%xmm2
+     * +[a-f0-9]+:  c4 e2 59 52 11        \{vex\} vpdpwssd \(%ecx\),%xmm4,%xmm2
+     * +[a-f0-9]+:  62 f2 5d 08 51 d2     vpdpbusds %xmm2,%xmm4,%xmm2
+     * +[a-f0-9]+:  c4 e2 59 51 d2        \{vex\} vpdpbusds %xmm2,%xmm4,%xmm2
+     * +[a-f0-9]+:  c4 e2 59 51 11        \{vex\} vpdpbusds \(%ecx\),%xmm4,%xmm2
+     * +[a-f0-9]+:  62 f2 5d 08 53 d2     vpdpwssds %xmm2,%xmm4,%xmm2
+     * +[a-f0-9]+:  c4 e2 59 53 d2        \{vex\} vpdpwssds %xmm2,%xmm4,%xmm2
+     * +[a-f0-9]+:  c4 e2 59 53 11        \{vex\} vpdpwssds \(%ecx\),%xmm4,%xmm2
+     */
+    byte expected_output[] = {
+        // turn off clang-format to keep one instruction per line
+        // clang-format off
+        0x62, 0xf2, 0x5d, 0x08, 0x50, 0xd2,
+        0xc4, 0xe2, 0x59, 0x50, 0xd2,
+        0xc4, 0xe2, 0x59, 0x50, 0x11,
+        0x62, 0xf2, 0x5d, 0x08, 0x52, 0xd2,
+        0xc4, 0xe2, 0x59, 0x52, 0xd2,
+        0xc4, 0xe2, 0x59, 0x52, 0x11,
+        0x62, 0xf2, 0x5d, 0x08, 0x51, 0xd2,
+        0xc4, 0xe2, 0x59, 0x51, 0xd2,
+        0xc4, 0xe2, 0x59, 0x51, 0x11,
+        0x62, 0xf2, 0x5d, 0x08, 0x53, 0xd2,
+        0xc4, 0xe2, 0x59, 0x53, 0xd2,
+        0xc4, 0xe2, 0x59, 0x53, 0x11,
+        // clang-format on
+    };
+    int opcodes[] = { OP_vpdpbusd, OP_vpdpwssd, OP_vpdpbusds, OP_vpdpwssds };
+    byte *start = buf;
+
+    for (int opcode_num = 0; opcode_num < sizeof(opcodes) / sizeof(int); opcode_num++) {
+        instr_t *instrs[3];
+        int opcode = opcodes[opcode_num];
+
+        instrs[0] = instr_create_1dst_3src(dc, opcode, REGARG(XMM2), REGARG(K0),
+                                           REGARG(XMM4), REGARG(XMM2));
+        instrs[1] =
+            instr_create_1dst_2src(dc, opcode, REGARG(XMM2), REGARG(XMM4), REGARG(XMM2));
+        memarg_disp = 0;
+        instrs[2] = instr_create_1dst_2src(dc, opcode, REGARG(XMM2), REGARG(XMM4),
+                                           MEMARG(OPSZ_16));
+        for (int i = 0; i < 3; i++) {
+            instr_t *instr = instrs[i];
+            ASSERT(instr);
+
+            byte *stop = instr_encode(dc, instr, start);
+            ASSERT(stop);
+#    if VERBOSE
+            for (byte *x = start; x != stop; x++) {
+                fprintf(stdout, "%02x ", *x);
+            }
+            fprintf(stdout, "\n");
+#    endif
+            start = stop;
+            instr_destroy(dc, instr);
+        }
+    }
+    for (int i = 0; i < sizeof(expected_output) / sizeof(byte); i++) {
+        ASSERT(expected_output[i] == buf[i]);
+    }
+}
+
+static void
+test_avx512_bf16_encoding(void *dc)
+{
+    /* These tests are taken from
+     * binutils-2.37.90/gas/testsuite/gas/i386/x86-64-avx512_bf16.{s,d}
+     */
+    // clang-format off
+    // 62 02 17 40 72 f4     vcvtne2ps2bf16 %zmm28,%zmm29,%zmm30
+    // 62 22 17 47 72 b4 f5 00 00 00 10  vcvtne2ps2bf16 0x10000000\(%rbp,%r14,8\),%zmm29,%zmm30\{%k7\}
+    // 62 42 17 50 72 31     vcvtne2ps2bf16 \(%r9\)\{1to16\},%zmm29,%zmm30
+    // 62 62 17 40 72 71 7f  vcvtne2ps2bf16 0x1fc0\(%rcx\),%zmm29,%zmm30
+    // 62 62 17 d7 72 b2 00 e0 ff ff   vcvtne2ps2bf16 -0x2000\(%rdx\)\{1to16\},%zmm29,%zmm30\{%k7\}\{z\}
+    // 62 02 7e 48 72 f5     vcvtneps2bf16 %zmm29,%ymm30
+    // 62 22 7e 4f 72 b4 f5 00 00 00 10  vcvtneps2bf16 0x10000000\(%rbp,%r14,8\),%ymm30\{%k7\}
+    // 62 42 7e 58 72 31     vcvtneps2bf16 \(%r9\)\{1to16\},%ymm30
+    // 62 62 7e 48 72 71 7f  vcvtneps2bf16 0x1fc0\(%rcx\),%ymm30
+    // 62 62 7e df 72 b2 00 e0 ff ff   vcvtneps2bf16 -0x2000\(%rdx\)\{1to16\},%ymm30\{%k7\}\{z\}
+    // 62 02 16 40 52 f4     vdpbf16ps %zmm28,%zmm29,%zmm30
+    // 62 22 16 47 52 b4 f5 00 00 00 10  vdpbf16ps 0x10000000\(%rbp,%r14,8\),%zmm29,%zmm30\{%k7\}
+    // 62 42 16 50 52 31     vdpbf16ps \(%r9\)\{1to16\},%zmm29,%zmm30
+    // 62 62 16 40 52 71 7f  vdpbf16ps 0x1fc0\(%rcx\),%zmm29,%zmm30
+    // 62 62 16 d7 52 b2 00 e0 ff ff   vdpbf16ps -0x2000\(%rdx\)\{1to16\},%zmm29,%zmm30\{%k7\}\{z\}
+    byte out00[] = { 0x62, 0x02, 0x17, 0x40, 0x72, 0xf4,}; //
+    byte out01[] = { 0x62, 0x22, 0x17, 0x47, 0x72, 0xb4, 0xf5, 0x00, 0x00, 0x00, 0x10,}; //
+    byte out02[] = { 0x62, 0x42, 0x17, 0x50, 0x72, 0x31,}; //
+    byte out03[] = { 0x62, 0x62, 0x17, 0x40, 0x72, 0x71, 0x7f,}; //
+    byte out04[] = { 0x62, 0x62, 0x17, 0xd7, 0x72, 0xb2, 0x00, 0xe0, 0xff, 0xff,}; //
+    byte out05[] = { 0x62, 0x02, 0x7e, 0x48, 0x72, 0xf5,}; //
+    byte out06[] = { 0x62, 0x22, 0x7e, 0x4f, 0x72, 0xb4, 0xf5, 0x00, 0x00, 0x00, 0x10,}; //
+    byte out07[] = { 0x62, 0x42, 0x7e, 0x58, 0x72, 0x31,}; //
+    byte out08[] = { 0x62, 0x62, 0x7e, 0x48, 0x72, 0x71, 0x7f,}; //
+    byte out09[] = { 0x62, 0x62, 0x7e, 0xdf, 0x72, 0xb2, 0x00, 0xe0, 0xff, 0xff,}; //
+    byte out10[] = { 0x62, 0x02, 0x16, 0x40, 0x52, 0xf4,}; //
+    byte out11[] = { 0x62, 0x22, 0x16, 0x47, 0x52, 0xb4, 0xf5, 0x00, 0x00, 0x00, 0x10,}; //
+    byte out12[] = { 0x62, 0x42, 0x16, 0x50, 0x52, 0x31,}; //
+    byte out13[] = { 0x62, 0x62, 0x16, 0x40, 0x52, 0x71, 0x7f,}; //
+    byte out14[] = { 0x62, 0x62, 0x16, 0xd7, 0x52, 0xb2, 0x00, 0xe0, 0xff, 0xff,}; //
+    opnd_t test0[][4] = {
+        { REGARG(ZMM30), REGARG(K0), REGARG(ZMM29), REGARG(ZMM28) },
+        { REGARG(ZMM30), REGARG(K7), REGARG(ZMM29), opnd_create_base_disp(DR_REG_RBP, DR_REG_R14 , 8, 0x10000000, OPSZ_64) },
+        { REGARG(ZMM30), REGARG(K0), REGARG(ZMM29), opnd_create_base_disp(DR_REG_R9 , DR_REG_NULL, 0,          0, OPSZ_4) },
+        { REGARG(ZMM30), REGARG(K0), REGARG(ZMM29), opnd_create_base_disp(DR_REG_RCX, DR_REG_NULL, 0,     0x1fc0, OPSZ_64) },
+        { REGARG(ZMM30), REGARG(K7), REGARG(ZMM29), opnd_create_base_disp(DR_REG_RDX, DR_REG_NULL, 0,    -0x2000, OPSZ_4) },
+    };
+    opnd_t test1[][3] = {
+        { REGARG_PARTIAL(ZMM30, OPSZ_32), REGARG(K0), REGARG(ZMM29) },
+        { REGARG_PARTIAL(ZMM30, OPSZ_32), REGARG(K7), opnd_create_base_disp(DR_REG_RBP, DR_REG_R14,  8,  0x10000000, OPSZ_64) },
+        { REGARG_PARTIAL(ZMM30, OPSZ_32), REGARG(K0), opnd_create_base_disp(DR_REG_R9,  DR_REG_NULL, 0,  0,          OPSZ_4) },
+        { REGARG_PARTIAL(ZMM30, OPSZ_32), REGARG(K0), opnd_create_base_disp(DR_REG_RCX, DR_REG_NULL, 0,  0x1fc0,     OPSZ_64) },
+        { REGARG_PARTIAL(ZMM30, OPSZ_32), REGARG(K7), opnd_create_base_disp(DR_REG_RDX, DR_REG_NULL, 0, -0x2000,     OPSZ_4) },
+    };
+    // clang-format on
+
+    // TODO: remove once these are available in some header
+#    define PREFIX_EVEX_z 0x000800000
+    uint prefixes[] = { 0, 0, 0, 0, PREFIX_EVEX_z };
+
+    int expected_sizes[] = {
+        sizeof(out00), sizeof(out01), sizeof(out02), sizeof(out03), sizeof(out04),
+        sizeof(out05), sizeof(out06), sizeof(out07), sizeof(out08), sizeof(out09),
+        sizeof(out10), sizeof(out11), sizeof(out12), sizeof(out13), sizeof(out14),
+    };
+
+    byte *expected_output[] = {
+        out00, out01, out02, out03, out04, out05, out06, out07,
+        out08, out09, out10, out11, out12, out13, out14,
+    };
+
+    for (int i = 0; i < 15; i++) {
+        instr_t *instr;
+        int set = i / 5;
+        int idx = i % 5;
+        if (set == 0) {
+            instr = INSTR_CREATE_vcvtne2ps2bf16_mask(dc, test0[idx][0], test0[idx][1],
+                                                     test0[idx][2], test0[idx][3]);
+        } else if (set == 1) {
+            instr = INSTR_CREATE_vcvtneps2bf16_mask(dc, test1[idx][0], test1[idx][1],
+                                                    test1[idx][2]);
+        } else if (set == 2) {
+            instr = INSTR_CREATE_vdpbf16ps_mask(dc, test0[idx][0], test0[idx][1],
+                                                test0[idx][2], test0[idx][3]);
+        }
+        instr_set_prefix_flag(instr, prefixes[idx]);
+        test_instr_encode(dc, instr, expected_sizes[i]);
+        for (int b = 0; b < expected_sizes[i]; b++) {
+            ASSERT(expected_output[i][b] == buf[b]);
+        }
+        // instr_destroy called by test_instr_encode
+    }
+}
+
+static void
 test_x64_vmovq(void *dc)
 {
     /* 62 61 fd 08 d6 0c 0a vmovq  %xmm25[8byte] -> (%rdx,%rcx)[8byte]
@@ -1302,6 +1569,23 @@ test_x64_vmovq(void *dc)
                               false /*no bytes*/, dbuf, BUFFER_SIZE_ELEMENTS(dbuf), &len);
     ASSERT(pc == &b2[7]);
     ASSERT(strcmp(dbuf, "vmovq  (%rdx,%rcx)[8byte] -> %xmm25\n") == 0);
+
+    const byte expected1[] = { 0x62, 0xc1, 0xfe, 0x08, 0x7e, 0x45, 0x00 };
+    const byte expected2[] = { 0x62, 0xc1, 0xfd, 0x08, 0xd6, 0x45, 0x00 };
+
+    instr_t *instr =
+        INSTR_CREATE_vmovq(dc, opnd_create_reg(DR_REG_XMM16),
+                           opnd_create_base_disp_ex(DR_REG_R13, DR_REG_NULL, 0, 0, OPSZ_8,
+                                                    true, false, false));
+    test_instr_encode(dc, instr, 7);
+    ASSERT(!memcmp(expected1, buf, 7));
+
+    instr = INSTR_CREATE_vmovq(dc,
+                               opnd_create_base_disp_ex(DR_REG_R13, DR_REG_NULL, 0, 0,
+                                                        OPSZ_8, true, false, false),
+                               opnd_create_reg_partial(DR_REG_XMM16, OPSZ_8));
+    test_instr_encode(dc, instr, 7);
+    ASSERT(!memcmp(expected2, buf, 7));
 }
 #endif
 
@@ -2465,6 +2749,119 @@ test_simd_zeroes_upper(void *dc)
     instr_destroy(dc, instr);
 }
 
+static void
+test_evex_compressed_disp_with_segment_prefix(void *dc)
+{
+#ifdef X64
+    byte *pc;
+    const byte b[] = { 0x65, 0x67, 0x62, 0x01, 0xc5, 0x00, 0xc4, 0x62, 0x21, 0x00 };
+    char dbuf[512];
+    int len;
+
+    pc =
+        disassemble_to_buffer(dc, (byte *)b, (byte *)b, false /*no pc*/,
+                              false /*no bytes*/, dbuf, BUFFER_SIZE_ELEMENTS(dbuf), &len);
+    ASSERT(pc == &b[0] + sizeof(b));
+    ASSERT(
+        strcmp(
+            dbuf,
+            "addr32 vpinsrw %xmm23[14byte] %gs:0x42(%r10d)[2byte] $0x00 -> %xmm28\n") ==
+        0);
+#endif
+}
+
+static void
+test_extra_leading_prefixes(void *dc)
+{
+    byte *pc;
+    char dbuf[512];
+    int len;
+#ifdef X64
+    const byte b1[] = { 0xf3, 0xf2, 0x4b, 0x0f, 0x70, 0x76, 0x00, 0xff };
+    const byte b2[] = { 0xf3, 0xf2, 0x0f, 0xbc, 0xf2 };
+
+    pc =
+        disassemble_to_buffer(dc, (byte *)b1, (byte *)b1, false /*no pc*/,
+                              false /*no bytes*/, dbuf, BUFFER_SIZE_ELEMENTS(dbuf), &len);
+    ASSERT(pc == &b1[0] + sizeof(b1));
+    ASSERT(strcmp(dbuf, "pshuflw 0x00(%r14)[16byte] $0xff -> %xmm6\n") == 0);
+
+    pc =
+        disassemble_to_buffer(dc, (byte *)b2, (byte *)b2, false /*no pc*/,
+                              false /*no bytes*/, dbuf, BUFFER_SIZE_ELEMENTS(dbuf), &len);
+    ASSERT(pc == &b2[0] + sizeof(b2));
+    ASSERT(strcmp(dbuf, "bsf    %edx -> %esi\n") == 0);
+#endif
+
+    /* Only FS/GS prefixes are accepted on x64, so different prefixes "win" here */
+    const byte b3[] = { 0x26, 0x26, 0x26, 0x26, 0x26, 0x26, 0x26, 0x64,
+                        0x26, 0x26, 0x26, 0x26, 0x13, 0x04, 0x0a };
+    pc =
+        disassemble_to_buffer(dc, (byte *)b3, (byte *)b3, false /*no pc*/,
+                              false /*no bytes*/, dbuf, BUFFER_SIZE_ELEMENTS(dbuf), &len);
+    ASSERT(pc == &b3[0] + sizeof(b3));
+#ifdef X64
+    ASSERT(strcmp(dbuf, "adc    %fs:(%rdx,%rcx)[4byte] %eax -> %eax\n") == 0);
+#else
+    ASSERT(strcmp(dbuf, "adc    %es:(%edx,%ecx)[4byte] %eax -> %eax\n") == 0);
+#endif
+}
+
+static void
+test_ud1_operands(void *dc)
+{
+    byte *pc;
+    char dbuf[512];
+    int len;
+
+    const byte b[] = { 0x67, 0x0f, 0xb9, 0x40, 0x16 };
+    pc =
+        disassemble_to_buffer(dc, (byte *)b, (byte *)b, false /*no pc*/,
+                              false /*no bytes*/, dbuf, BUFFER_SIZE_ELEMENTS(dbuf), &len);
+    ASSERT(pc == &b[0] + sizeof(b));
+#ifdef X64
+    ASSERT(strcmp(dbuf, "addr32 ud1    %eax 0x16(%eax)[4byte]\n") == 0);
+#else
+    ASSERT(strcmp(dbuf, "addr16 ud1    %eax 0x16(%bx,%si)[4byte]\n") == 0);
+#endif
+}
+
+static void
+test_disasm_to_buffer(void *dc)
+{
+    /* Test disassemble_to_buffer() corner cases. */
+    byte *pc;
+    byte b[] = { 0x90 };
+    char dbuf[512];
+    const char *expect = "nop\n";
+    size_t expect_len = strlen(expect);
+    int len;
+    /* Test plenty of room. */
+    pc = disassemble_to_buffer(dc, b, b, false /*no pc*/, false /*no bytes*/, dbuf,
+                               expect_len + 10, &len);
+    ASSERT(pc == b + 1);
+    ASSERT(strcmp(dbuf, expect) == 0);
+    ASSERT(len == expect_len);
+    /* Test just enough room. */
+    pc = disassemble_to_buffer(dc, b, b, false /*no pc*/, false /*no bytes*/, dbuf,
+                               expect_len + 1 /*null*/, &len);
+    ASSERT(pc == b + 1);
+    ASSERT(strcmp(dbuf, expect) == 0);
+    ASSERT(len == expect_len);
+    /* Test not enough room for null. */
+    pc = disassemble_to_buffer(dc, b, b, false /*no pc*/, false /*no bytes*/, dbuf,
+                               expect_len, &len);
+    ASSERT(pc == b + 1);
+    ASSERT(strncmp(dbuf, expect, len) == 0);
+    ASSERT(len == expect_len - 1);
+    /* Test not enough room for full string. */
+    pc = disassemble_to_buffer(dc, b, b, false /*no pc*/, false /*no bytes*/, dbuf,
+                               expect_len - 1, &len);
+    ASSERT(pc == b + 1);
+    ASSERT(strncmp(dbuf, expect, len) == 0);
+    ASSERT(len == expect_len - 2);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -2496,9 +2893,15 @@ main(int argc, char *argv[])
 
     test_cti_prefixes(dcontext);
 
+    test_cti_predicates(dcontext);
+
+    test_rep_predicates(dcontext);
+
 #ifndef X64
     test_modrm16(dcontext);
 #endif
+
+    test_modrm_invalid(dcontext);
 
     test_size_changes(dcontext);
 
@@ -2512,6 +2915,10 @@ main(int argc, char *argv[])
     test_x64_abs_addr(dcontext);
 
     test_x64_inc(dcontext);
+
+    test_avx512_vnni_encoding(dcontext);
+
+    test_avx512_bf16_encoding(dcontext);
 
     test_x64_vmovq(dcontext);
 #endif
@@ -2543,6 +2950,14 @@ main(int argc, char *argv[])
     test_opnd(dcontext);
 
     test_simd_zeroes_upper(dcontext);
+
+    test_evex_compressed_disp_with_segment_prefix(dcontext);
+
+    test_extra_leading_prefixes(dcontext);
+
+    test_ud1_operands(dcontext);
+
+    test_disasm_to_buffer(dcontext);
 
 #ifndef STANDALONE_DECODER /* speed up compilation */
     test_all_opcodes_2_avx512_vex(dcontext);

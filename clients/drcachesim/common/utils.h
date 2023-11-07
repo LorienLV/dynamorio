@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2015-2019 Google, Inc.  All rights reserved.
+ * Copyright (c) 2015-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -39,6 +39,13 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <vector>
+
+namespace dynamorio {
+namespace drmemtrace {
+
+// XXX: DR should export this
+#define INVALID_THREAD_ID 0
 
 // XXX: perhaps we should use a C++-ish stream approach instead
 // This cannot be named ERROR as that conflicts with Windows headers.
@@ -46,6 +53,13 @@
 
 // XXX: can we share w/ core DR?
 #define IS_POWER_OF_2(x) ((x) != 0 && ((x) & ((x)-1)) == 0)
+
+// XXX i#4399: DR should define a DEBUG-only assert.
+#ifdef DEBUG
+#    define ASSERT(x, msg) DR_ASSERT_MSG(x, msg)
+#else
+#    define ASSERT(x, msg) /* Nothing. */
+#endif
 
 #define BUFFER_SIZE_BYTES(buf) sizeof(buf)
 #define BUFFER_SIZE_ELEMENTS(buf) (BUFFER_SIZE_BYTES(buf) / sizeof(buf[0]))
@@ -62,6 +76,13 @@
 
 #define ALIGN_FORWARD(x, alignment) \
     ((((ptr_uint_t)x) + ((alignment)-1)) & (~((ptr_uint_t)(alignment)-1)))
+#define ALIGN_BACKWARD(x, alignment) (((ptr_uint_t)x) & (~((ptr_uint_t)(alignment)-1)))
+
+#define NOTIFY(level, ...)                     \
+    do {                                       \
+        if (op_verbose.get_value() >= (level)) \
+            dr_fprintf(STDERR, __VA_ARGS__);   \
+    } while (0)
 
 #define BOOLS_MATCH(b1, b2) (!!(b1) == !!(b2))
 
@@ -80,13 +101,6 @@
 #else
 #    define START_PACKED_STRUCTURE /* nothing */
 #    define END_PACKED_STRUCTURE __attribute__((__packed__))
-#endif
-
-/* TODO(i#2924): Remove this and others like it once we stop supporting VS2013. */
-#if defined(WINDOWS) && _MSC_VER < 1900
-#    define CONSTEXPR const /* 'constexpr' not supported */
-#else
-#    define CONSTEXPR constexpr
 #endif
 
 #ifndef __has_cpp_attribute
@@ -134,5 +148,41 @@ to_hex_string(T integer)
             << integer;
     return sstream.str();
 }
+
+static inline bool
+ends_with(const std::string &str, const std::string &with)
+{
+    size_t pos = str.rfind(with);
+    if (pos == std::string::npos)
+        return false;
+    return (pos + with.size() == str.size());
+}
+
+static inline bool
+starts_with(const std::string &str, const std::string &with)
+{
+    size_t pos = str.find(with);
+    if (pos == std::string::npos)
+        return false;
+    return pos == 0;
+}
+
+static inline std::vector<std::string>
+split_by(std::string s, const std::string &sep)
+{
+    size_t pos;
+    std::vector<std::string> vec;
+    if (s.empty())
+        return vec;
+    do {
+        pos = s.find(sep);
+        vec.push_back(s.substr(0, pos));
+        s.erase(0, pos + sep.length());
+    } while (pos != std::string::npos);
+    return vec;
+}
+
+} // namespace drmemtrace
+} // namespace dynamorio
 
 #endif /* _UTILS_H_ */

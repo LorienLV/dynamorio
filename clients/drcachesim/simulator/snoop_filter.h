@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2015-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2015-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -33,9 +33,16 @@
 #ifndef _SNOOP_FILTER_H_
 #define _SNOOP_FILTER_H_ 1
 
-#include "cache.h"
+#include <stdint.h>
+
 #include <unordered_map>
 #include <vector>
+
+#include "cache.h"
+#include "trace_entry.h"
+
+namespace dynamorio {
+namespace drmemtrace {
 
 struct coherence_table_entry_t {
     std::vector<bool> sharers;
@@ -62,9 +69,12 @@ protected:
     std::unordered_map<addr_t, coherence_table_entry_t> coherence_table_;
     cache_t **caches_;
     int num_snooped_caches_;
-    int_least64_t num_writes_;
-    int_least64_t num_writebacks_;
-    int_least64_t num_invalidates_;
+    int64_t num_writes_;
+    int64_t num_writebacks_;
+    int64_t num_invalidates_;
 };
+
+} // namespace drmemtrace
+} // namespace dynamorio
 
 #endif /* _SNOOP_FILTER_H_ */

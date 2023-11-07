@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2010-2020 Google, Inc.    All rights reserved.
+# Copyright (c) 2010-2022 Google, Inc.    All rights reserved.
 # Copyright (c) 2010 VMware, Inc.    All rights reserved.
 # **********************************************************
 
@@ -62,6 +62,10 @@ if (DR_HOST_AARCH64)
   set(ARCH "-aarch64")
 endif ()
 
+if (DR_HOST_RISCV64)
+  set(ARCH "-riscv64")
+endif ()
+
 # we need libc b/c our elftoolchain libraries use it
 set(DynamoRIO_USE_LIBC ON)
 
@@ -70,7 +74,7 @@ set(DynamoRIO_USE_LIBC ON)
 if (WIN32)
   # XXX: if we add any more of these .lib files we should share this code
   # (currently we have make/ntdll_imports.cmake and here).
-  find_program(LIB_EXECUTABLE lib.exe DOC "path to lib.exe")
+  find_program(LIB_EXECUTABLE lib.exe HINTS "${cl_path}" DOC "path to lib.exe")
   if (NOT LIB_EXECUTABLE)
     message(FATAL_ERROR "Cannot find lib.exe")
   endif (NOT LIB_EXECUTABLE)
@@ -126,9 +130,9 @@ elseif (UNIX)
   if (APPLE)
     set(srcs ${srcs} drsyms_macho.c)
     set(dwarf_libpath
-      "${PROJECT_SOURCE_DIR}/ext/drsyms/libelftc-macho/lib${BITS}/libdwarf.a")
+      "${PROJECT_SOURCE_DIR}/ext/drsyms/libelftc-macho${ARCH}/lib${BITS}/libdwarf.a")
     set(elftc_libpath
-      "${PROJECT_SOURCE_DIR}/ext/drsyms/libelftc-macho/lib${BITS}/libelftc.a")
+      "${PROJECT_SOURCE_DIR}/ext/drsyms/libelftc-macho${ARCH}/lib${BITS}/libelftc.a")
   else (APPLE)
     set(srcs ${srcs} drsyms_elf.c)
     set(dwarf_libpath
@@ -182,9 +186,9 @@ configure_extension(drsyms_static ON)
 configure_drsyms_target(drsyms_static)
 use_DynamoRIO_extension(drsyms_static drcontainers)
 
-target_link_libraries(drsyms "${dwarf_libpath}" "${elftc_libpath}")
+target_link_libraries(drsyms dwarf elftc)
 if (LINUX)
-  target_link_libraries(drsyms "${elf_libpath}")
+  target_link_libraries(drsyms elf)
 endif ()
 # i#693: CMake will try to export the path to the static libs we use via
 # IMPORTED_LINK_INTERFACE_LIBRARIES_NOCONFIG, but they won't exist on the

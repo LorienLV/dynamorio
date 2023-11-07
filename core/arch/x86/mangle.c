@@ -1,5 +1,5 @@
 /* ******************************************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2010 Massachusetts Institute of Technology  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * ******************************************************************************/
@@ -104,8 +104,8 @@ insert_out_of_line_context_switch(dcontext_t *dcontext, instrlist_t *ilist,
     insert_reachable_cti(dcontext, ilist, instr, encode_pc,
                          save ? get_clean_call_save(dcontext _IF_X64(GENCODE_X64))
                               : get_clean_call_restore(dcontext _IF_X64(GENCODE_X64)),
-                         false /*call*/, true /*returns*/, false /*!precise*/, DR_REG_R11,
-                         NULL);
+                         false /*call*/, true /*returns*/, false /*!precise*/,
+                         CALL_SCRATCH_REG, NULL);
     return get_clean_call_switch_stack_size();
 }
 
@@ -938,7 +938,7 @@ insert_reachable_cti(dcontext_t *dcontext, instrlist_t *ilist, instr_t *where,
 /*###########################################################################
  *###########################################################################
  *
- *   M A N G L I N G   R O U T I N E S
+ * MANGLING ROUTINES
  */
 
 /* Updates the immediates used by insert_mov_immed_arch() to use the value "val".
@@ -1726,8 +1726,8 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
     }
 
     if (TEST(INSTR_CLOBBER_RETADDR, instr->flags)) {
-        /* we put the value in the note field earlier */
-        ptr_uint_t val = (ptr_uint_t)instr->note;
+        /* we put the value in the offset field earlier */
+        ptr_uint_t val = (ptr_uint_t)instr->offset;
         insert_mov_ptr_uint_beyond_TOS(dcontext, ilist, instr, val, retsz);
     }
 
@@ -2341,10 +2341,10 @@ mangle_float_pc(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
         instr_t *prev;
         for (prev = instr_get_prev_expanded(dcontext, ilist, instr); prev != NULL;
              prev = instr_get_prev_expanded(dcontext, ilist, prev)) {
-            dr_fp_type_t type;
-            if (instr_is_app(prev) && instr_is_floating_ex(prev, &type)) {
+            dr_instr_category_t type;
+            if (instr_is_app(prev) && instr_is_floating_type(prev, &type)) {
                 bool control_instr = false;
-                if (type == DR_FP_STATE /* quick check */ &&
+                if (TEST(DR_INSTR_CATEGORY_STATE, type) /* quick check */ &&
                     /* Check the list from Intel Vol 1 8.1.8 */
                     (op == OP_fnclex || op == OP_fldcw || op == OP_fnstcw ||
                      op == OP_fnstsw || op == OP_fnstenv || op == OP_fldenv ||
@@ -3892,10 +3892,10 @@ static uint selfmod_eflags[] = { FRAG_WRITES_EFLAGS_6, FRAG_WRITES_EFLAGS_OF, 0 
 static app_pc selfmod_gt4G[] = { NULL, (app_pc)(POINTER_MAX - 2) /*so end can be +2*/ };
 #    define SELFMOD_NUM_GT4G (sizeof(selfmod_gt4G) / sizeof(selfmod_gt4G[0]))
 #endif
-uint selfmod_copy_start_offs[SELFMOD_NUM_S2RO][SELFMOD_NUM_EFLAGS] IF_X64([
-    SELFMOD_NUM_GT4G]);
-uint selfmod_copy_end_offs[SELFMOD_NUM_S2RO][SELFMOD_NUM_EFLAGS] IF_X64([
-    SELFMOD_NUM_GT4G]);
+uint selfmod_copy_start_offs[SELFMOD_NUM_S2RO]
+                            [SELFMOD_NUM_EFLAGS] IF_X64([SELFMOD_NUM_GT4G]);
+uint selfmod_copy_end_offs[SELFMOD_NUM_S2RO]
+                          [SELFMOD_NUM_EFLAGS] IF_X64([SELFMOD_NUM_GT4G]);
 
 void
 set_selfmod_sandbox_offsets(dcontext_t *dcontext)

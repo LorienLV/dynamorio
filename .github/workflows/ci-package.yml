@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2020-2021 Google, Inc.  All rights reserved.
+# Copyright (c) 2020-2023 Google, Inc.  All rights reserved.
 # **********************************************************
 
 # Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     - name: Fetch Sources
       run: |
@@ -67,7 +69,7 @@ jobs:
         # We do shallow clones and assume DrM will update its DR at least once
         # every 250 DR commits.
         git clone --depth=2 https://github.com/DynamoRIO/drmemory.git drmemory
-        cd drmemory && git submodule update --init --depth 250 && cd ..
+        cd drmemory && git submodule update --init --recursive --depth 250 && cd ..
 
     # Install multilib for non-cross-compiling Linux build.
     # GA CI uses packages.microsoft.com which is missing i386 packages, and
@@ -77,7 +79,7 @@ jobs:
       run: |
         sudo apt update
         sudo apt-get -y install doxygen vera++ zlib1g-dev libsnappy-dev \
-          g++-multilib libunwind-dev
+          liblz4-dev g++-multilib libunwind-dev
         sudo add-apt-repository 'deb [arch=i386] http://us.archive.ubuntu.com/ubuntu focal main'
         apt download libunwind8:i386 libunwind-dev:i386 liblzma5:i386
         mkdir ../extract
@@ -100,7 +102,7 @@ jobs:
       # We only use a non-zero build # when making multiple manual builds in one day.
       run: |
         if test -z "${{ github.event.inputs.version }}"; then
-          export VERSION_NUMBER=8.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
+          export VERSION_NUMBER=10.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
         else
           export VERSION_NUMBER=${{ github.event.inputs.version }}
         fi
@@ -160,27 +162,31 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     - name: Fetch Sources
       run: |
         git fetch --no-tags --depth=1 origin master
         # Include Dr. Memory in packages.
         git clone --depth=2 https://github.com/DynamoRIO/drmemory.git drmemory
-        cd drmemory && git submodule update --init --depth 250 && cd ..
+        cd drmemory && git submodule update --init --recursive --depth 250 && cd ..
 
     # Install cross-compiler for cross-compiling Linux build.
-    # Unfortunately there is no libunwind-dev or libunwind cross-compile
-    # package so we unpack the native versions and copy their files.
+    # Unfortunately there are no libunwind or compression cross-compile
+    # packages so we unpack the native versions and copy their files.
     - name: Create Build Environment
       run: |
         sudo apt-get update
-        sudo apt-get -y install doxygen vera++ cmake zlib1g-dev libsnappy-dev \
-          g++-aarch64-linux-gnu
+        sudo apt-get -y install doxygen vera++ cmake g++-aarch64-linux-gnu
         sudo add-apt-repository 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports focal main'
-        apt download libunwind8:arm64 libunwind-dev:arm64 liblzma5:arm64
+        apt download libunwind8:arm64 libunwind-dev:arm64 liblzma5:arm64 \
+          zlib1g:arm64 zlib1g-dev:arm64 libsnappy1v5:arm64 libsnappy-dev:arm64 \
+          liblz4-1:arm64 liblz4-dev:arm64
         mkdir ../extract
         for i in *.deb; do dpkg-deb -x $i ../extract; done
         for i in include lib; do sudo rsync -av ../extract/usr/${i}/aarch64-linux-gnu/ /usr/aarch64-linux-gnu/${i}/; done
+        sudo rsync -av ../extract/usr/include/ /usr/aarch64-linux-gnu/include/
         sudo rsync -av ../extract/lib/aarch64-linux-gnu/ /usr/aarch64-linux-gnu/lib/
 
     - name: Get Version
@@ -188,7 +194,7 @@ jobs:
       # XXX: See x86 job comments on sharing the default ver# with CMakeLists.txt.
       run: |
         if test -z "${{ github.event.inputs.version }}"; then
-          export VERSION_NUMBER=8.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
+          export VERSION_NUMBER=10.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
         else
           export VERSION_NUMBER=${{ github.event.inputs.version }}
         fi
@@ -244,27 +250,31 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     - name: Fetch Sources
       run: |
         git fetch --no-tags --depth=1 origin master
         # Include Dr. Memory in packages.
         git clone --depth=2 https://github.com/DynamoRIO/drmemory.git drmemory
-        cd drmemory && git submodule update --init --depth 250 && cd ..
+        cd drmemory && git submodule update --init --recursive --depth 250 && cd ..
 
     # Install cross-compiler for cross-compiling Linux build.
-    # Unfortunately there is no libunwind-dev or libunwind cross-compile
-    # package so we unpack the native versions and copy their files.
+    # Unfortunately there are no libunwind or compression cross-compile
+    # packages so we unpack the native versions and copy their files.
     - name: Create Build Environment
       run: |
         sudo apt-get update
-        sudo apt-get -y install doxygen vera++ cmake zlib1g-dev libsnappy-dev \
-          g++-arm-linux-gnueabihf
+        sudo apt-get -y install doxygen vera++ cmake g++-arm-linux-gnueabihf
         sudo add-apt-repository 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports focal main'
-        apt download libunwind8:armhf libunwind-dev:armhf liblzma5:armhf
+        apt download libunwind8:armhf libunwind-dev:armhf liblzma5:armhf \
+          zlib1g:armhf zlib1g-dev:armhf libsnappy1v5:armhf libsnappy-dev:armhf \
+          liblz4-1:armhf liblz4-dev:armhf
         mkdir ../extract
         for i in *.deb; do dpkg-deb -x $i ../extract; done
         for i in include lib; do sudo rsync -av ../extract/usr/${i}/arm-linux-gnueabihf/ /usr/arm-linux-gnueabihf/${i}/; done
+        sudo rsync -av ../extract/usr/include/ /usr/arm-linux-gnueabihf/include/
         sudo rsync -av ../extract/lib/arm-linux-gnueabihf/ /usr/arm-linux-gnueabihf/lib/
 
     - name: Get Version
@@ -272,7 +282,7 @@ jobs:
       # XXX: See x86 job comments on sharing the default ver# with CMakeLists.txt.
       run: |
         if test -z "${{ github.event.inputs.version }}"; then
-          export VERSION_NUMBER=8.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
+          export VERSION_NUMBER=10.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
         else
           export VERSION_NUMBER=${{ github.event.inputs.version }}
         fi
@@ -328,22 +338,25 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     - name: Fetch Sources
       run: |
         git fetch --no-tags --depth=1 origin master
         # Include Dr. Memory in packages.
         git clone --depth=2 https://github.com/DynamoRIO/drmemory.git drmemory
-        cd drmemory && git submodule update --init --depth 250 && cd ..
+        cd drmemory && git submodule update --init --recursive --depth 250 && cd ..
 
     # Fetch and install Android NDK for Andoid cross-compile build.
     - name: Create Build Environment
       run: |
         sudo apt-get update
-        sudo apt-get -y install doxygen vera++ cmake zlib1g-dev libsnappy-dev
+        sudo apt-get -y install doxygen vera++ cmake
         cd /tmp
         wget https://dl.google.com/android/repository/android-ndk-r10e-linux-x86_64.zip
         unzip -q android-ndk-r10e-linux-x86_64.zip
+        export ANDROID_NDK_ROOT=/tmp/android-ndk-r10e
         android-ndk-r10e/build/tools/make-standalone-toolchain.sh --arch=arm \
           --toolchain=arm-linux-androideabi-4.9 --platform=android-21 \
           --install-dir=/tmp/android-gcc-arm-ndk-10e
@@ -357,7 +370,7 @@ jobs:
       # XXX: See x86 job comments on sharing the default ver# with CMakeLists.txt.
       run: |
         if test -z "${{ github.event.inputs.version }}"; then
-          export VERSION_NUMBER=8.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
+          export VERSION_NUMBER=10.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
         else
           export VERSION_NUMBER=${{ github.event.inputs.version }}
         fi
@@ -411,17 +424,19 @@ jobs:
   ###########################################################################
   # Windows .zip with 32-bit and 64-bit x86 builds:
   windows:
-    runs-on: windows-2016
+    runs-on: windows-2019
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     - name: Fetch Sources
       run: |
         git fetch --no-tags --depth=1 origin master
         # Include Dr. Memory in packages.
         git clone --depth=2 https://github.com/DynamoRIO/drmemory.git drmemory
-        cd drmemory && git submodule update --init --depth 250 && cd ..
+        cd drmemory && git submodule update --init --recursive --depth 250 && cd ..
 
     - name: Download Packages
       shell: powershell
@@ -435,7 +450,7 @@ jobs:
       # XXX: See x86 job comments on sharing the default ver# with CMakeLists.txt.
       run: |
         if test -z "${{ github.event.inputs.version }}"; then
-          export VERSION_NUMBER=8.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
+          export VERSION_NUMBER=10.0.$((`git log -n 1 --format=%ct` / (60*60*24)))
         else
           export VERSION_NUMBER=${{ github.event.inputs.version }}
         fi
@@ -456,7 +471,7 @@ jobs:
         set PATH=c:\projects\install\doxygen;%PATH%
         dir "c:\Program Files (x86)\WiX Toolset"*
         set PATH=C:\Program Files (x86)\WiX Toolset v3.11\bin;%PATH%
-        call "C:/Program Files (x86)/Microsoft Visual Studio/2017/Enterprise/VC/Auxiliary/Build/vcvars32.bat"
+        call "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars32.bat"
         echo ------ Running suite ------
         echo PATH is "%PATH%"
         echo Running in directory "%CD%"
@@ -512,13 +527,15 @@ jobs:
     steps:
       # We need a checkout to run git log for the version.
     - uses: actions/checkout@v2
+      with:
+        submodules: true
 
     - name: Get Version
       id: version
       # XXX: See x86 job comments on sharing the default ver# with CMakeLists.txt.
       run: |
         if test -z "${{ github.event.inputs.version }}"; then
-          export VERSION_NUMBER="8.0.$((`git log -n 1 --format=%ct` / (60*60*24)))"
+          export VERSION_NUMBER="10.0.$((`git log -n 1 --format=%ct` / (60*60*24)))"
           export PREFIX="cronbuild-"
         else
           export VERSION_NUMBER=${{ github.event.inputs.version }}

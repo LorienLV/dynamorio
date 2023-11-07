@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -562,6 +562,13 @@ enter_fcache(dcontext_t *dcontext, fcache_enter_func_t entry, cache_pc pc)
 #endif
 
     dcontext->whereami = DR_WHERE_FCACHE;
+    /* XXX i#5383: Audit these calls and ensure they cover all scenarios, are placed
+     * at the most efficient level, and are always properly paired.
+     * Better to have write calls around block building and linking paths rather than
+     * assuming all paths might have written, with a debug query here to make sure no
+     * paths were missed?
+     */
+    PTHREAD_JIT_READ();
     (*entry)(dcontext);
     IF_WINDOWS(ASSERT_NOT_REACHED()); /* returns for signals on unix */
 }
@@ -1149,7 +1156,7 @@ dispatch_exit_fcache(dcontext_t *dcontext)
          * Do not bother to try to update on an exit due to a signal
          * (so signals_pending>0; for <0 we're in the handler).
          */
-        if (IF_UNIX_ELSE(dcontext->signals_pending <= 0, false)) {
+        if (IF_UNIX_ELSE(dcontext->signals_pending <= 0, true)) {
             SELF_PROTECT_LOCAL(dcontext, WRITABLE);
             /* update IBL target table if target is a valid IBT */
             /* FIXME: This is good for modularity but adds
@@ -1338,8 +1345,11 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
     }
 #endif
 
+    /* A count of cache exits is a useful enough metric to gauge performance
+     * problems that we pay for a counter in release build.
+     */
+    RSTATS_INC(num_exits);
 #if defined(DEBUG) || defined(KSTATS)
-    STATS_INC(num_exits);
     ASSERT(dcontext->last_exit != NULL);
 
     /* special exits that aren't from real fragments */
@@ -1466,16 +1476,16 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
             LOG(THREAD, LOG_DISPATCH, 2, "Exit from coarse ibl from tag " PFX ": %s %s",
                 dcontext->coarse_exit.src_tag,
                 TEST(FRAG_IS_TRACE, last_f->flags) ? "trace" : "bb",
-                TEST(LINK_RETURN, dcontext->last_exit->flags)
-                    ? "ret"
-                    : EXIT_IS_CALL(dcontext->last_exit->flags) ? "call*" : "jmp*");
+                TEST(LINK_RETURN, dcontext->last_exit->flags)  ? "ret"
+                    : EXIT_IS_CALL(dcontext->last_exit->flags) ? "call*"
+                                                               : "jmp*");
         } else {
             /* We can get here for -indirect_stubs via client special ibl */
             LOG(THREAD, LOG_DISPATCH, 2, "Exit from sourceless ibl: %s %s",
                 TEST(FRAG_IS_TRACE, last_f->flags) ? "trace" : "bb",
-                TEST(LINK_RETURN, dcontext->last_exit->flags)
-                    ? "ret"
-                    : EXIT_IS_CALL(dcontext->last_exit->flags) ? "call*" : "jmp*");
+                TEST(LINK_RETURN, dcontext->last_exit->flags)  ? "ret"
+                    : EXIT_IS_CALL(dcontext->last_exit->flags) ? "call*"
+                                                               : "jmp*");
         }
     } else if (dcontext->last_exit == get_coarse_exit_linkstub()) {
         DOLOG(2, LOG_DISPATCH, {
@@ -1786,7 +1796,7 @@ adjust_syscall_continuation(dcontext_t *dcontext)
     bool syscall_method_is_syscall = get_syscall_method() == SYSCALL_METHOD_SYSCALL;
 
     if (get_syscall_method() == SYSCALL_METHOD_SYSENTER) {
-#    ifdef MACOS
+#    if defined(MACOS) && defined(X86)
         if (!dcontext->sys_was_int) {
             priv_mcontext_t *mc = get_mcontext(dcontext);
             LOG(THREAD, LOG_SYSCALLS, 3,
@@ -2011,7 +2021,7 @@ handle_system_call(dcontext_t *dcontext)
     }
 #endif
 
-#ifdef MACOS
+#if defined(MACOS) && defined(X86)
     if (get_syscall_method() == SYSCALL_METHOD_SYSENTER && !dcontext->sys_was_int) {
         /* The kernel returns control to whatever user-mode places in edx.
          * We want to put this in even if we skip the syscall as we'll still call
@@ -2088,6 +2098,10 @@ handle_system_call(dcontext_t *dcontext)
              * These are nearly all non-blocking so this should not be an issue with
              * signal delay from blocking.  Sigreturn and clone will come back to
              * d_r_dispatch so there's no worry about unbounded delay.
+             *
+             * TODO i#6105: A signal arriving between the pre-syscall event and the
+             * syscall can cause problems for clients.  We should interrupt the
+             * syscall with EINTR in that case for non-ignorable syscalls.
              */
             ASSERT((!is_sigreturn_syscall(dcontext) &&
                     !was_thread_create_syscall(dcontext)) ||
@@ -2182,9 +2196,10 @@ handle_post_system_call(dcontext_t *dcontext)
     if (was_sigreturn_syscall(dcontext)) {
         /* restore app xax/r0 */
         LOG(THREAD, LOG_SYSCALLS, 3,
-            "post-sigreturn: setting xax/r0 to " PFX ", asynch_target=" PFX "\n",
+            "post-sigreturn: setting xax/r0/a0 to " PFX ", asynch_target=" PFX "\n",
             dcontext->sys_param1, dcontext->asynch_target);
-        mc->IF_X86_ELSE(xax, r0) = dcontext->sys_param1;
+        /* FIXME i#3544: Check if this is a proper register to use */
+        mc->IF_X86_ELSE(xax, IF_RISCV64_ELSE(a0, r0)) = dcontext->sys_param1;
 #    ifdef MACOS
         /* We need to skip the use app_xdx, as we've changed the context.
          * We can't just set app_xdx from handle_sigreturn() as the

@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2016-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2016-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -33,13 +33,17 @@
 /* instru: instrumentation utilities.
  */
 
+#include "instru.h"
+
+#include <stddef.h>
+
 #include "dr_api.h"
+#include "drmgr.h"
 #include "drreg.h"
 #include "drutil.h"
-#include "instru.h"
-#include "../common/trace_entry.h"
+#include "trace_entry.h"
+
 #ifdef LINUX
-#    include <sched.h>
 #    ifndef _GNU_SOURCE
 #        define _GNU_SOURCE // For syscall()
 #    endif
@@ -49,6 +53,9 @@
 #ifdef WINDOWS
 #    include <intrin.h>
 #endif
+
+namespace dynamorio {
+namespace drmemtrace {
 
 unsigned short
 instru_t::instr_to_instr_type(instr_t *instr, bool repstr_expanded)
@@ -185,11 +192,9 @@ instru_t::instr_to_prefetch_type(instr_t *instr)
 bool
 instru_t::is_aarch64_icache_flush_op(instr_t *instr)
 {
-    if (instr_get_opcode(instr) != OP_sys)
-        return false;
-    switch (opnd_get_immed_int(instr_get_src(instr, 0))) {
+    switch (instr_get_opcode(instr)) {
     // TODO i#4406: Handle privileged icache operations.
-    case DR_IC_IVAU: return true;
+    case OP_ic_ivau: return true;
     }
     return false;
 }
@@ -197,14 +202,12 @@ instru_t::is_aarch64_icache_flush_op(instr_t *instr)
 bool
 instru_t::is_aarch64_dcache_flush_op(instr_t *instr)
 {
-    if (instr_get_opcode(instr) != OP_sys)
-        return false;
-    switch (opnd_get_immed_int(instr_get_src(instr, 0))) {
+    switch (instr_get_opcode(instr)) {
     // TODO i#4406: Handle all privileged dcache operations.
-    case DR_DC_IVAC:
-    case DR_DC_CVAU:
-    case DR_DC_CIVAC:
-    case DR_DC_CVAC: return true;
+    case OP_dc_ivac:
+    case OP_dc_cvau:
+    case OP_dc_civac:
+    case OP_dc_cvac: return true;
     }
     return false;
 }
@@ -212,9 +215,7 @@ instru_t::is_aarch64_dcache_flush_op(instr_t *instr)
 bool
 instru_t::is_aarch64_dc_zva_instr(instr_t *instr)
 {
-    // TODO i#4393: Split OP_sys into multiple opcodes based on the operation.
-    return instr_get_opcode(instr) == OP_sys &&
-        opnd_get_immed_int(instr_get_src(instr, 0)) == DR_DC_ZVA;
+    return instr_get_opcode(instr) == OP_dc_zva;
 }
 #endif
 
@@ -309,6 +310,10 @@ instru_t::get_cpu_id()
         // this should be pretty rare and we can live without it.
         return -1;
     }
+#elif defined(MACOS)
+    /* TODO i#5383: Add an M1 solution. */
+    DR_ASSERT_MSG(false, "Not implemented for M1");
+    return -1;
 #else
     uint cpu;
     if (syscall(SYS_getcpu, &cpu, NULL, NULL) < 0)
@@ -340,7 +345,7 @@ instru_t::count_app_instrs(instrlist_t *ilist)
             ++count;
         }
         if (!in_emulation_region && instr_is_app(inst)) {
-            // Hooked native functions end up with an artifical jump whose translation
+            // Hooked native functions end up with an artificial jump whose translation
             // is its target.  We do not want to count these.
             if (!(instr_is_ubr(inst) && opnd_is_pc(instr_get_target(inst)) &&
                   opnd_get_pc(instr_get_target(inst)) == instr_get_app_pc(inst)))
@@ -351,3 +356,6 @@ instru_t::count_app_instrs(instrlist_t *ilist)
     }
     return count;
 }
+
+} // namespace drmemtrace
+} // namespace dynamorio

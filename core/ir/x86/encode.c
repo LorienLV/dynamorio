@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2001-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -1252,8 +1252,8 @@ opnd_type_ok(decode_info_t *di /*prefixes field is IN/OUT; x86_mode is IN*/, opn
                    * to low 2GB (w/o top bit set, else sign-extended).
                    */
                   (X64_MODE(di) &&
-                   ((ptr_uint_t)di->final_pc) + (ptr_uint_t)opnd_get_instr(opnd)->note -
-                           di->cur_note <
+                   ((ptr_uint_t)di->final_pc) + (ptr_uint_t)opnd_get_instr(opnd)->offset -
+                           di->cur_offs <
                        INT_MAX &&
                    size_ok(di, OPSZ_4, opsize, false)))) ||
                 (opnd_is_immed_int(opnd) &&
@@ -1290,6 +1290,13 @@ opnd_type_ok(decode_info_t *di /*prefixes field is IN/OUT; x86_mode is IN*/, opn
                   * after all, OPND_CREATE_ABSMEM() makes a rip-rel.
                   */
                  (opnd_is_rel_addr(opnd) &&
+                  /* If we don't know the final PC we bypass this template in
+                   * favor of the general template which should always match
+                   * and generally be what is expected.  get_encoding_info()
+                   * is the caller for this case and it documents that its
+                   * result is not perfect.
+                   */
+                  di->final_pc != NULL &&
                   (!REL32_REACHABLE(di->final_pc + MAX_INSTR_LENGTH,
                                     (byte *)opnd_get_addr(opnd)) ||
                    !REL32_REACHABLE(di->final_pc + 4, (byte *)opnd_get_addr(opnd)))) ||
@@ -2035,7 +2042,7 @@ static byte *
 get_mem_instr_addr(decode_info_t *di, opnd_t opnd)
 {
     CLIENT_ASSERT(opnd_is_mem_instr(opnd), "internal encode error");
-    return di->final_pc + ((ptr_int_t)opnd_get_instr(opnd)->note - di->cur_note) +
+    return di->final_pc + ((ptr_int_t)opnd_get_instr(opnd)->offset - di->cur_offs) +
         opnd_get_mem_instr_disp(opnd);
 }
 
@@ -2172,7 +2179,7 @@ encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
              * This only works if the instr has no other immeds!
              */
             instr_t *target_instr = opnd_get_instr(opnd);
-            ptr_uint_t target = (ptr_uint_t)target_instr->note - di->cur_note;
+            ptr_uint_t target = (ptr_uint_t)target_instr->offset - di->cur_offs;
             /* We don't know the encode pc yet, so we put it in as pc-relative and
              * fix it up later.
              * The size was already checked, so just use the template size.
@@ -2201,12 +2208,12 @@ encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
          * Here we simply set the immed to the absolute pc target.
          */
         if (opnd_is_near_instr(opnd)) {
-            /* assume the note fields have been set with relative offsets
-             * from some start pc, and that our caller put our note in
-             * di->cur_note
+            /* Assume the offset fields have been set with relative offsets
+             * from some start pc, and that our caller put our offset in
+             * di->cur_offs.
              */
             instr_t *target_instr = opnd_get_instr(opnd);
-            target = (ptr_uint_t)target_instr->note - di->cur_note;
+            target = (ptr_uint_t)target_instr->offset - di->cur_offs;
             /* target is now a pc-relative target, so we can encode as is */
             set_immed(di, target, opsize);
             /* this immed is pc-relative except it needs to have the
@@ -2240,10 +2247,10 @@ encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
         CLIENT_ASSERT(di->size_immed == OPSZ_NA && di->size_immed2 == OPSZ_NA,
                       "encode error: A operand size mismatch");
         if (opnd_is_far_instr(opnd)) {
-            /* caller set di.cur_note w/ the pc where we'll be encoding this */
-            ptr_int_t source = (ptr_uint_t)di->cur_note;
+            /* caller set di.cur_offs w/ the pc where we'll be encoding this */
+            ptr_int_t source = (ptr_uint_t)di->cur_offs;
             instr_t *target_instr = opnd_get_instr(opnd);
-            ptr_int_t dest = (ptr_uint_t)target_instr->note;
+            ptr_int_t dest = (ptr_uint_t)target_instr->offset;
             ptr_uint_t encode_pc = (ptr_uint_t)di->final_pc;
             /* A label shouldn't be very far away and thus we should not overflow
              * (unless client asked to encode at very high address or sthg,
@@ -2585,7 +2592,8 @@ encode_cti(instr_t *instr, byte *copy_pc, byte *final_pc,
         }
         /* assumption: no 16-bit targets */
         CLIENT_ASSERT(
-            !TESTANY(~(PREFIX_JCC_TAKEN | PREFIX_JCC_NOT_TAKEN), instr->prefixes),
+            !TESTANY(~(PREFIX_JCC_TAKEN | PREFIX_JCC_NOT_TAKEN | PREFIX_PRED_MASK),
+                     instr->prefixes),
             "encode cti error: non-branch-hint prefixes not supported");
     }
 
@@ -2608,7 +2616,8 @@ encode_cti(instr_t *instr, byte *copy_pc, byte *final_pc,
         target = (ptr_uint_t)opnd_get_pc(opnd);
     } else if (opnd_is_near_instr(opnd)) {
         instr_t *in = opnd_get_instr(opnd);
-        target = (ptr_uint_t)final_pc + ((ptr_uint_t)in->note - (ptr_uint_t)instr->note);
+        target =
+            (ptr_uint_t)final_pc + ((ptr_uint_t)in->offset - (ptr_uint_t)instr->offset);
     } else {
         target = 0; /* avoid compiler warning */
         CLIENT_ASSERT(false, "encode_cti error: opnd must be near pc or near instr");
@@ -2627,7 +2636,7 @@ encode_cti(instr_t *instr, byte *copy_pc, byte *final_pc,
                           "encode_cti error: target beyond 8-bit reach");
             return NULL;
         }
-        *((char *)pc) = (char)offset;
+        *((sbyte *)pc) = (sbyte)offset;
         pc++;
     } else {
         /* 32-bit offset */
@@ -2716,7 +2725,7 @@ copy_and_re_relativize_raw_instr(dcontext_t *dcontext, instr_t *instr, byte *dst
         /* We only support non-4-byte rip-rel disps for 1-byte instr-final (jcc_short). */
         if (rip_rel_pos + 1 == instr->length) {
             ASSERT(CHECK_TRUNCATE_TYPE_sbyte(new_offs));
-            *((char *)dst_pc) = (char)new_offs;
+            *((sbyte *)dst_pc) = (sbyte)new_offs;
         } else {
             ASSERT(rip_rel_pos + 4 <= instr->length);
             ASSERT(CHECK_TRUNCATE_TYPE_int(new_offs));
@@ -2735,7 +2744,7 @@ copy_and_re_relativize_raw_instr(dcontext_t *dcontext, instr_t *instr, byte *dst
 /* Encodes instruction instr.  The parameter copy_pc points
  * to the address of this instruction in the fragment cache.
  * Checks for and fixes pc-relative instructions.
- * N.B: if instr is a jump with an instr_t target, the caller MUST set the note
+ * N.B: if instr is a jump with an instr_t target, the caller MUST set the offset
  * field in the target instr_t prior to calling instr_encode on the jump instr.
  *
  * Returns the pc after the encoded instr, or NULL if the instruction cannot be
@@ -2778,7 +2787,8 @@ instr_encode_arch(dcontext_t *dcontext, instr_t *instr, byte *copy_pc, byte *fin
           reg_is_pointer_sized(opnd_get_reg(instr_get_src(instr, 1))))) ||
         /* no indirect or far */
         opc == OP_jmp_short || opc == OP_jmp || opc == OP_call) {
-        if (!TESTANY(~(PREFIX_JCC_TAKEN | PREFIX_JCC_NOT_TAKEN), instr->prefixes)) {
+        if (!TESTANY(~(PREFIX_JCC_TAKEN | PREFIX_JCC_NOT_TAKEN | PREFIX_PRED_MASK),
+                     instr->prefixes)) {
             /* encode_cti cannot handle funny prefixes or indirect branches or rets */
             return encode_cti(instr, copy_pc, final_pc,
                               check_reachable _IF_DEBUG(assert_reachable));
@@ -2856,7 +2866,7 @@ instr_encode_arch(dcontext_t *dcontext, instr_t *instr, byte *copy_pc, byte *fin
     di.seg_override = REG_NULL; /* operands will fill in */
 
     /* instr_t* operand support */
-    di.cur_note = (ptr_int_t)instr->note;
+    di.cur_offs = (ptr_int_t)instr->offset;
 
     di.vex_encoded = TEST(REQUIRES_VEX, info->flags);
     di.evex_encoded = TEST(REQUIRES_EVEX, info->flags);

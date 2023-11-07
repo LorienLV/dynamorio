@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2016-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2016-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -33,24 +33,31 @@
 // func_trace.cpp: module for recording function traces
 
 #define NOMINMAX // Avoid windows.h messing up std::min.
-#include <algorithm>
-#include <string>
-#include <vector>
-#include <set>
-#include "dr_api.h"
-#include "drsyms.h"
-#include "drwrap.h"
-#include "drmgr.h"
-#include "drvector.h"
-#include "hashtable.h"
-#include "trace_entry.h"
-#include "../common/options.h"
 #include "func_trace.h"
 
-// The expected pattern for a single_op_value is:
-//     function_name|function_id|arguments_num
-// where function_name can contain spaces (for instance, C++ namespace prefix)
-#define PATTERN_SEPARATOR "|"
+#include <sys/types.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <set>
+#include <string>
+#include <vector>
+
+#include "dr_api.h"
+#include "drmgr.h"
+#include "drvector.h"
+#include "options.h"
+#include "hashtable.h"
+#include "droption.h"
+#include "drsyms.h"
+#include "drwrap.h"
+#include "trace_entry.h"
+#include "utils.h"
+
+namespace dynamorio {
+namespace drmemtrace {
 
 #define NOTIFY(level, ...)                     \
     do {                                       \
@@ -225,7 +232,16 @@ instru_funcs_module_load(void *drcontext, const module_data_t *mod, bool loaded)
 {
     if (drcontext == NULL || mod == NULL)
         return;
-
+#ifndef DRMEMTRACE_STATIC
+    // Skip DR itself and the client and its libraries as symbol lookup is slow
+    // on Windows and the fewer libs we check the better (i#6342), unless we're
+    // statically linked (when the app itself might be excluded here).
+    if (dr_memory_is_dr_internal(mod->start) || dr_memory_is_in_client(mod->start)) {
+        NOTIFY(1, "Not looking for symbols in DR/client library %s\n",
+               get_module_basename(mod));
+        return;
+    }
+#endif
     uint64 ms_start = dr_get_milliseconds();
     const char *mod_name = get_module_basename(mod);
     NOTIFY(2, "instru_funcs_module_load for %s\n", mod_name);
@@ -318,6 +334,11 @@ instru_funcs_module_unload(void *drcontext, const module_data_t *mod)
 {
     if (drcontext == NULL || mod == NULL)
         return;
+#ifndef DRMEMTRACE_STATIC
+    // As for module load, skip DR itself and the client and its libraries.
+    if (dr_memory_is_dr_internal(mod->start) || dr_memory_is_in_client(mod->start))
+        return;
+#endif
     const char *mod_name = get_module_basename(mod);
     for (size_t i = 0; i < func_names.entries; i++) {
         func_metadata_t *f = (func_metadata_t *)drvector_get_entry(&func_names, (uint)i);
@@ -336,17 +357,26 @@ instru_funcs_module_unload(void *drcontext, const module_data_t *mod)
     }
 }
 
-static std::vector<std::string>
-split_by(std::string s, std::string sep)
+dr_emit_flags_t
+func_trace_enabled_instrument_event(void *drcontext, void *tag, instrlist_t *bb,
+                                    instr_t *instr, instr_t *where, bool for_trace,
+                                    bool translating, void *user_data)
 {
-    size_t pos;
-    std::vector<std::string> vec;
-    do {
-        pos = s.find(sep);
-        vec.push_back(s.substr(0, pos));
-        s.erase(0, pos + sep.length());
-    } while (pos != std::string::npos);
-    return vec;
+    if (funcs_str.empty())
+        return DR_EMIT_DEFAULT;
+    return drwrap_invoke_insert(drcontext, tag, bb, instr, where, for_trace, translating,
+                                user_data);
+}
+
+dr_emit_flags_t
+func_trace_disabled_instrument_event(void *drcontext, void *tag, instrlist_t *bb,
+                                     instr_t *instr, instr_t *where, bool for_trace,
+                                     bool translating, void *user_data)
+{
+    if (funcs_str.empty())
+        return DR_EMIT_DEFAULT;
+    return drwrap_invoke_insert_cleanup_only(drcontext, tag, bb, instr, where, for_trace,
+                                             translating, user_data);
 }
 
 static void
@@ -391,7 +421,7 @@ func_trace_init(func_trace_append_entry_vec_t append_entry_vec_,
                 ssize_t (*write_file)(file_t file, const void *data, size_t count),
                 file_t funclist_file)
 {
-    // Online is not supported as we have no mechanism to pass the funclist_file
+    // i#6376: Online is not supported as we have no mechanism to pass the funclist_file
     // data to the simulator.
     if (!op_offline.get_value())
         return false;
@@ -480,7 +510,10 @@ func_trace_init(func_trace_append_entry_vec_t append_entry_vec_,
             goto failed;
         }
     }
-    if (!drwrap_init()) {
+    /* For multi-instrumentation cases with drbbdup, we need the drwrap inverted
+     * control mode where we invoke its instrumentation handlers.
+     */
+    if (!drwrap_set_global_flags(DRWRAP_INVERT_CONTROL) || !drwrap_init()) {
         DR_ASSERT(false);
         goto failed;
     }
@@ -541,3 +574,6 @@ func_trace_exit()
     }
     drwrap_exit();
 }
+
+} // namespace drmemtrace
+} // namespace dynamorio

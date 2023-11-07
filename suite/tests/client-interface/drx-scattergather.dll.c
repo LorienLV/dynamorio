@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2019 Google, Inc.  All rights reserved.
+ * Copyright (c) 2019-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -30,22 +30,15 @@
  * DAMAGE.
  */
 
-/* TODO i#2985: Test the future drx_expand_scatter_gather() extension using drmgr. */
+/* Tests drx_expand_scatter_gather(). */
 
 #include "dr_api.h"
+#include "client_tools.h"
 #include "drmgr.h"
 #include "drreg.h"
 #include "drx.h"
 #include "drx-scattergather-shared.h"
 #include <limits.h>
-
-#define CHECK(x, msg)                                                                \
-    do {                                                                             \
-        if (!(x)) {                                                                  \
-            dr_fprintf(STDERR, "CHECK failed %s:%d: %s\n", __FILE__, __LINE__, msg); \
-            dr_abort();                                                              \
-        }                                                                            \
-    } while (0);
 
 static uint64 global_sg_count;
 
@@ -65,6 +58,7 @@ inscount(uint num_instrs)
     global_sg_count += num_instrs;
 }
 
+#if defined(X86)
 /* Global, because the markers will be in a different app2app list after breaking up
  * scatter/gather into separate basic blocks during expansion.
  */
@@ -73,6 +67,7 @@ static app_pc mask_update_test_avx512_gather_pc = (app_pc)INT_MAX;
 static app_pc mask_clobber_test_avx512_scatter_pc = (app_pc)INT_MAX;
 static app_pc mask_update_test_avx512_scatter_pc = (app_pc)INT_MAX;
 static app_pc mask_update_test_avx2_gather_pc = (app_pc)INT_MAX;
+#endif
 
 static dr_emit_flags_t
 event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *instr,
@@ -189,6 +184,11 @@ event_bb_app2app(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
             scatter_gather_present = true;
         } else if (instr_is_scatter(instr)) {
             scatter_gather_present = true;
+#if defined(X86)
+            /* TODO i#5036: Port this code to AArch64 to test state restoration of
+             * clobbered predicate registers (when we have added support for state
+             * restoration).
+             */
         } else if (instr_is_mov_constant(instr, &val) &&
                    val == TEST_AVX512_GATHER_MASK_CLOBBER_MARKER) {
             instr_t *next_instr = instr_get_next(instr);
@@ -257,6 +257,7 @@ event_bb_app2app(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
                         search_for_next_gather_pc(drcontext, next_instr);
                 }
             }
+#endif /* defined(X86) */
         }
     }
     bool expansion_ok = drx_expand_scatter_gather(drcontext, bb, &expanded);
@@ -268,6 +269,11 @@ event_bb_app2app(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
     }
     CHECK((scatter_gather_present IF_X64(&&expanded)) || (expansion_ok && !expanded),
           "drx_expand_scatter_gather() bad OUT values");
+#if defined(X86)
+    /* TODO i#5036: Port this code to AArch64 to test state restoration of clobbered
+     *              predicate registers (when we have added support for state
+     *              restoration).
+     */
     for (instr = instrlist_first(bb); instr != NULL; instr = instr_get_next(instr)) {
         if (instr_get_opcode(instr) == OP_kandnw &&
             (instr_get_app_pc(instr) == mask_clobber_test_avx512_gather_pc ||
@@ -281,7 +287,7 @@ event_bb_app2app(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
              */
             instrlist_postinsert(
                 bb, instr,
-                INSTR_XL8(INSTR_CREATE_ud2a(drcontext),
+                INSTR_XL8(INSTR_CREATE_ud2(drcontext),
                           /* It's guaranteed by the test that there will be a next
                            * app instruction, because the emulated sequence consists
                            * of 16 mask updates, and this is just the first.
@@ -296,7 +302,7 @@ event_bb_app2app(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
              * update.
              */
             instrlist_preinsert(bb, instr,
-                                INSTR_XL8(INSTR_CREATE_ud2a(drcontext),
+                                INSTR_XL8(INSTR_CREATE_ud2(drcontext),
                                           /* It's again guaranteed by the test that there
                                            * will be a next app instruction.
                                            */
@@ -304,7 +310,7 @@ event_bb_app2app(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
         } else if (instr_is_mov(instr) && instr_reads_memory(instr) &&
                    (instr_get_app_pc(instr) == mask_update_test_avx2_gather_pc)) {
             instrlist_postinsert(bb, instr,
-                                 INSTR_XL8(INSTR_CREATE_ud2a(drcontext),
+                                 INSTR_XL8(INSTR_CREATE_ud2(drcontext),
                                            /* It's again guaranteed by the test that there
                                             * will be a next app instruction.
                                             */
@@ -313,6 +319,7 @@ event_bb_app2app(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
             break;
         }
     }
+#endif /* defined(X86) */
     *user_data = (uint *)dr_thread_alloc(drcontext, sizeof(uint));
     return DR_EMIT_DEFAULT;
 }

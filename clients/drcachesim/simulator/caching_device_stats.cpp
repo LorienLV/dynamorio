@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2015-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2015-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -30,11 +30,28 @@
  * DAMAGE.
  */
 
-#include <assert.h>
-#include <iostream>
-#include <iomanip>
-#include "../common/options.h"
 #include "caching_device_stats.h"
+
+#include <assert.h>
+#include <stdint.h>
+#ifdef HAS_ZLIB
+#    include <zlib.h>
+#endif
+
+#include <iomanip>
+#include <iostream>
+#include <locale>
+#include <map>
+#include <string>
+#include <utility>
+
+#include "memref.h"
+#include "options.h"
+#include "caching_device_block.h"
+#include "trace_entry.h"
+
+namespace dynamorio {
+namespace drmemtrace {
 
 caching_device_stats_t::caching_device_stats_t(const std::string &miss_file,
                                                int block_size, bool warmup_enabled,
@@ -53,6 +70,7 @@ caching_device_stats_t::caching_device_stats_t(const std::string &miss_file,
     , is_coherent_(is_coherent)
     , access_count_(block_size)
     , file_(nullptr)
+    , caching_device_(nullptr)
 {
     if (miss_file.empty()) {
         dump_misses_ = false;
@@ -134,7 +152,7 @@ void
 caching_device_stats_t::dump_miss(const memref_t &memref)
 {
     addr_t pc, addr;
-    if (type_is_instr(memref.data.type))
+    if (type_is_instr(memref.instr.type))
         pc = memref.instr.addr;
     else { // data ref: others shouldn't get here
         assert(type_is_prefetch(memref.data.type) ||
@@ -249,3 +267,6 @@ caching_device_stats_t::invalidate(invalidation_type_t invalidation_type)
         num_coherence_invalidates_++;
     }
 }
+
+} // namespace drmemtrace
+} // namespace dynamorio

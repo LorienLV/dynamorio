@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2010-2021 Google, Inc.    All rights reserved.
+# Copyright (c) 2010-2022 Google, Inc.    All rights reserved.
 # Copyright (c) 2010 VMware, Inc.    All rights reserved.
 # **********************************************************
 
@@ -111,15 +111,15 @@ add_subdirectory(drmgr)
 add_subdirectory(drx)
 add_subdirectory(drwrap)
 add_subdirectory(drreg)
-# TODO i#4134: ARM not yet supported.
-if (X86)
-  add_subdirectory(drbbdup)
-endif (X86)
+add_subdirectory(drbbdup)
 add_subdirectory(drsyms)
 add_subdirectory(drutil)
 add_subdirectory(droption)
 add_subdirectory(drcovlib)
 add_subdirectory(drstatecmp)
+if (BUILD_PT_TRACER)
+  add_subdirectory(drpttracer)
+endif (BUILD_PT_TRACER)
 if (LINUX) # TODO i#2414: Port to Windows, Mac, and Android.
   if (HAVE_LIBUNWIND_H)
     add_subdirectory(drcallstack)

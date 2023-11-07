@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2017-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2017-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2016 ARM Limited. All rights reserved.
  * **********************************************************/
 
@@ -80,9 +80,19 @@ instr_branch_type(instr_t *cti_instr)
     case OP_tbnz:
     case OP_tbz: return LINK_DIRECT | LINK_JMP;
     case OP_bl: return LINK_DIRECT | LINK_CALL;
+    case OP_blraa:
+    case OP_blrab:
+    case OP_blraaz:
+    case OP_blrabz:
     case OP_blr: return LINK_INDIRECT | LINK_CALL;
-    case OP_br: return LINK_INDIRECT | LINK_JMP;
-    case OP_ret: return LINK_INDIRECT | LINK_RETURN;
+    case OP_br:
+    case OP_braa:
+    case OP_brab:
+    case OP_braaz:
+    case OP_brabz: return LINK_INDIRECT | LINK_JMP;
+    case OP_ret:
+    case OP_retaa:
+    case OP_retab: return LINK_INDIRECT | LINK_RETURN;
     }
     CLIENT_ASSERT(false, "instr_branch_type: unknown opcode");
     return LINK_INDIRECT;
@@ -105,7 +115,15 @@ bool
 instr_is_call_arch(instr_t *instr)
 {
     int opc = instr->opcode; /* caller ensures opcode is valid */
-    return (opc == OP_bl || opc == OP_blr);
+    switch (opc) {
+    case OP_bl:
+    case OP_blr:
+    case OP_blraa:
+    case OP_blrab:
+    case OP_blraaz:
+    case OP_blrabz: return true;
+    default: return false;
+    }
 }
 
 bool
@@ -126,14 +144,21 @@ bool
 instr_is_call_indirect(instr_t *instr)
 {
     int opc = instr_get_opcode(instr);
-    return (opc == OP_blr);
+    switch (opc) {
+    case OP_blr:
+    case OP_blraa:
+    case OP_blrab:
+    case OP_blraaz:
+    case OP_blrabz: return true;
+    default: return false;
+    }
 }
 
 bool
 instr_is_return(instr_t *instr)
 {
     int opc = instr_get_opcode(instr);
-    return (opc == OP_ret);
+    return (opc == OP_ret || opc == OP_retaa || opc == OP_retab);
 }
 
 bool
@@ -149,7 +174,22 @@ bool
 instr_is_mbr_arch(instr_t *instr)
 {
     int opc = instr->opcode; /* caller ensures opcode is valid */
-    return (opc == OP_blr || opc == OP_br || opc == OP_ret);
+    switch (opc) {
+    case OP_blr:
+    case OP_br:
+    case OP_braa:
+    case OP_brab:
+    case OP_braaz:
+    case OP_brabz:
+    case OP_blraa:
+    case OP_blrab:
+    case OP_blraaz:
+    case OP_blrabz:
+    case OP_ret:
+    case OP_retaa:
+    case OP_retab: return true;
+    default: return false;
+    }
 }
 
 bool
@@ -246,8 +286,15 @@ instr_is_mov_constant(instr_t *instr, ptr_int_t *value)
 bool
 instr_is_prefetch(instr_t *instr)
 {
-    int opcode = instr_get_opcode(instr);
-    return opcode == OP_prfm || opcode == OP_prfum;
+    switch (instr_get_opcode(instr)) {
+    case OP_prfm:
+    case OP_prfum:
+    case OP_prfb:
+    case OP_prfh:
+    case OP_prfw:
+    case OP_prfd: return true;
+    default: return false;
+    }
 }
 
 bool
@@ -263,6 +310,53 @@ instr_is_rep_string_op(instr_t *instr)
 }
 
 bool
+instr_is_floating_type(instr_t *instr, dr_instr_category_t *type OUT)
+{
+    /* DR_FP_STATE instructions aren't available on AArch64.
+     * Processor state is saved/restored with loads and stores.
+     */
+    uint cat = instr_get_category(instr);
+    if (!TEST(DR_INSTR_CATEGORY_FP, cat))
+        return false;
+    if (type != NULL)
+        *type = cat;
+    return true;
+}
+
+bool
+instr_is_floating_ex(instr_t *instr, dr_fp_type_t *type OUT)
+{
+    /* DR_FP_STATE instructions aren't available on AArch64.
+     * Processor state is saved/restored with loads and stores.
+     */
+    uint cat = instr_get_category(instr);
+    if (!TEST(DR_INSTR_CATEGORY_FP, cat))
+        return false;
+    else if (TEST(DR_INSTR_CATEGORY_MATH, cat)) {
+        if (type != NULL)
+            *type = DR_FP_MATH;
+        return true;
+    } else if (TEST(DR_INSTR_CATEGORY_CONVERT, cat)) {
+        if (type != NULL)
+            *type = DR_FP_CONVERT;
+        return true;
+    } else if (TEST(DR_INSTR_CATEGORY_MOVE, cat)) {
+        if (type != NULL)
+            *type = DR_FP_MOVE;
+        return true;
+    } else {
+        CLIENT_ASSERT(false, "instr_is_floating_ex: FP instruction without subcategory");
+        return false;
+    }
+}
+
+bool
+instr_is_floating(instr_t *instr)
+{
+    return instr_is_floating_type(instr, NULL);
+}
+
+bool
 instr_saves_float_pc(instr_t *instr)
 {
     return false;
@@ -275,8 +369,7 @@ bool
 instr_is_icache_op(instr_t *instr)
 {
     int opc = instr_get_opcode(instr);
-#define SYS_ARG_IC_IVAU 0x1ba9
-    if (opc == OP_sys && opnd_get_immed_int(instr_get_src(instr, 0)) == SYS_ARG_IC_IVAU)
+    if (opc == OP_ic_ivau)
         return true; /* ic ivau, xT */
     if (opc == OP_isb)
         return true; /* isb */
@@ -428,6 +521,12 @@ reg_is_fp(reg_id_t reg)
 }
 
 bool
+reg_is_z(reg_id_t reg)
+{
+    return DR_REG_Z0 <= reg && reg <= DR_REG_Z31;
+}
+
+bool
 instr_is_nop(instr_t *instr)
 {
     uint opc = instr_get_opcode(instr);
@@ -537,8 +636,28 @@ DR_API
 bool
 instr_is_scatter(instr_t *instr)
 {
-    /* FIXME i#3837: add support. */
-    ASSERT_NOT_IMPLEMENTED(false);
+    switch (instr_get_opcode(instr)) {
+    case OP_st1b:
+    case OP_st1h:
+    case OP_st1w:
+    case OP_st1d:
+    case OP_st2b:
+    case OP_st2h:
+    case OP_st2w:
+    case OP_st2d:
+    case OP_st3b:
+    case OP_st3h:
+    case OP_st3w:
+    case OP_st3d:
+    case OP_st4b:
+    case OP_st4h:
+    case OP_st4w:
+    case OP_st4d:
+    case OP_stnt1b:
+    case OP_stnt1h:
+    case OP_stnt1w:
+    case OP_stnt1d: return true;
+    }
     return false;
 }
 
@@ -546,8 +665,53 @@ DR_API
 bool
 instr_is_gather(instr_t *instr)
 {
-    /* FIXME i#3837: add support. */
-    ASSERT_NOT_IMPLEMENTED(false);
+    switch (instr_get_opcode(instr)) {
+    case OP_ld1b:
+    case OP_ld1h:
+    case OP_ld1w:
+    case OP_ld1d:
+    case OP_ld1sb:
+    case OP_ld1sh:
+    case OP_ld1sw:
+    case OP_ld1rob:
+    case OP_ld1rqb:
+    case OP_ld1rqh:
+    case OP_ld1rqw:
+    case OP_ld1rqd:
+    case OP_ldff1b:
+    case OP_ldff1h:
+    case OP_ldff1w:
+    case OP_ldff1d:
+    case OP_ldff1sb:
+    case OP_ldff1sh:
+    case OP_ldff1sw:
+    case OP_ldnf1b:
+    case OP_ldnf1h:
+    case OP_ldnf1w:
+    case OP_ldnf1d:
+    case OP_ldnf1sb:
+    case OP_ldnf1sh:
+    case OP_ldnf1sw:
+    case OP_ldnt1b:
+    case OP_ldnt1h:
+    case OP_ldnt1w:
+    case OP_ldnt1d:
+    case OP_ldnt1sb:
+    case OP_ldnt1sh:
+    case OP_ldnt1sw:
+    case OP_ld2b:
+    case OP_ld2h:
+    case OP_ld2w:
+    case OP_ld2d:
+    case OP_ld3b:
+    case OP_ld3h:
+    case OP_ld3w:
+    case OP_ld3d:
+    case OP_ld4b:
+    case OP_ld4h:
+    case OP_ld4w:
+    case OP_ld4d: return true;
+    }
     return false;
 }
 

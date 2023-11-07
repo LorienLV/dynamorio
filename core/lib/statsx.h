@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2003-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -99,6 +99,7 @@ STATS_DEF("Re-takeovers after native", num_retakeover_after_native)
 #else
 RSTATS_DEF("Total signals delivered", num_signals)
 RSTATS_DEF("Total signals delivered to native threads", num_native_signals)
+RSTATS_DEF("Signals rerouted", num_signals_rerouted)
 RSTATS_DEF("Signals dropped", num_signals_dropped)
 RSTATS_DEF("Signals in coarse units delayed", num_signals_coarse_delayed)
 #endif
@@ -677,7 +678,7 @@ STATS_DEF("Waits due to shared cache barrier", num_wait_shared_barrier)
 
 STATS_DEF("Entrance hooks to DR", num_entering_DR)
 STATS_DEF("Exit hooks from DR", num_exiting_DR)
-STATS_DEF("Fcache exits, total", num_exits)
+RSTATS_DEF("Fcache exits, total", num_exits)
 STATS_DEF("Fcache exits, coarse-grain fragments", num_exits_coarse)
 STATS_DEF("Fcache exits, coarse-grain targeting trace head", num_exits_coarse_trace_head)
 STATS_DEF("Fcache exits, fine targeting th coarse", num_exits_fine2th_coarse)

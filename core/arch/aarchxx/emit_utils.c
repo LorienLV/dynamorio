@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2014-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2014-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2016 ARM Limited. All rights reserved.
  * **********************************************************/
 
@@ -52,7 +52,7 @@ insert_load_dr_tls_base(dcontext_t *dcontext, instrlist_t *ilist, instr_t *where
      */
     PRE(ilist, where,
         INSTR_CREATE_mrs(dcontext, opnd_create_reg(reg_base),
-                         opnd_create_reg(DR_REG_TPIDR_EL0)));
+                         opnd_create_reg(LIB_SEG_TLS)));
 #else // ARM
     /* load TLS base from user-read-only-thread-ID register
      * mrc p15, 0, reg_base, c13, c0, 3

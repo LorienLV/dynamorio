@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2016-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2016-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -44,6 +44,19 @@
 #include "raw2trace.h"
 #include "raw2trace_directory.h"
 
+using ::dynamorio::drmemtrace::raw2trace_directory_t;
+using ::dynamorio::drmemtrace::raw2trace_t;
+using ::dynamorio::droption::bytesize_t;
+using ::dynamorio::droption::droption_parser_t;
+using ::dynamorio::droption::DROPTION_SCOPE_ALL;
+using ::dynamorio::droption::DROPTION_SCOPE_FRONTEND;
+using ::dynamorio::droption::droption_t;
+
+namespace {
+
+// XXX: We're duplicating some options from common/options.cpp: we should be
+// able to share?!
+
 static droption_t<std::string>
     op_indir(DROPTION_SCOPE_FRONTEND, "indir", "",
              "[Required] Directory with trace input files",
@@ -59,6 +72,13 @@ static droption_t<std::string> op_alt_module_dir(
     "Specifies a directory to look for binaries needed to post-process "
     "the trace.  This directory takes precedence over the recorded path.");
 
+static droption_t<bytesize_t> op_chunk_instr_count(
+    DROPTION_SCOPE_FRONTEND, "chunk_instr_count", 10 * 1000 * 1000U,
+    "Chunk instruction count",
+    "Specifies the size in instructions of the chunks into which a trace output file "
+    "is split inside a zipfile.  This is the granularity of a fast seek. "
+    "For 32-bit this cannot exceed 4G.");
+
 static droption_t<unsigned int> op_verbose(DROPTION_SCOPE_FRONTEND, "verbose", 0,
                                            "Verbosity level for diagnostic output",
                                            "Verbosity level for diagnostic output.");
@@ -70,12 +90,25 @@ static droption_t<int>
             "disables concurrency and uses  single thread to perform all operations.  A "
             "negative value sets the job count to the number of hardware threads.");
 
+static droption_t<std::string> op_trace_compress(
+    DROPTION_SCOPE_FRONTEND, "compress", DEFAULT_TRACE_COMPRESSION_TYPE,
+    "Trace compression: \"zip\",\"gzip\",\"zlib\",\"lz4\",\"none\"",
+    "Specifies the compression type to use for trace files: \"zip\", "
+    "\"gzip\", \"zlib\", \"lz4\", or \"none\". "
+    "In most cases where fast skipping by instruction count is not needed "
+    "lz4 compression generally improves performance and is recommended. "
+    "When it comes to storage types, the impact on overhead varies: "
+    "for SSDs, zip and gzip often increase overhead and should only be chosen "
+    "if space is limited.");
+
 #define FATAL_ERROR(msg, ...)                               \
     do {                                                    \
         fprintf(stderr, "ERROR: " msg "\n", ##__VA_ARGS__); \
         fflush(stderr);                                     \
         exit(1);                                            \
     } while (0)
+
+} // namespace
 
 int
 _tmain(int argc, const TCHAR *targv[])
@@ -95,12 +128,16 @@ _tmain(int argc, const TCHAR *targv[])
     }
 
     raw2trace_directory_t dir(op_verbose.get_value());
-    std::string dir_err = dir.initialize(op_indir.get_value(), op_outdir.get_value());
+    std::string dir_err = dir.initialize(op_indir.get_value(), op_outdir.get_value(),
+                                         op_trace_compress.get_value());
     if (!dir_err.empty())
         FATAL_ERROR("Directory parsing failed: %s", dir_err.c_str());
-    raw2trace_t raw2trace(dir.modfile_bytes_, dir.in_files_, dir.out_files_, NULL,
+    raw2trace_t raw2trace(dir.modfile_bytes_, dir.in_files_, dir.out_files_,
+                          dir.out_archives_, dir.encoding_file_,
+                          dir.serial_schedule_file_, dir.cpu_schedule_file_, nullptr,
                           op_verbose.get_value(), op_jobs.get_value(),
-                          op_alt_module_dir.get_value());
+                          op_alt_module_dir.get_value(), op_chunk_instr_count.get_value(),
+                          dir.in_kfiles_map_, dir.kcoredir_, dir.kallsymsdir_);
     std::string error = raw2trace.do_conversion();
     if (!error.empty())
         FATAL_ERROR("Conversion failed: %s", error.c_str());

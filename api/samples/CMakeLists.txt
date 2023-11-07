@@ -1,5 +1,5 @@
 # **********************************************************
-# Copyright (c) 2010-2021 Google, Inc.    All rights reserved.
+# Copyright (c) 2010-2023 Google, Inc.    All rights reserved.
 # Copyright (c) 2009-2010 VMware, Inc.    All rights reserved.
 # **********************************************************
 
@@ -35,6 +35,10 @@ if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
   set(DEBUG ON)
 endif ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
 
+if (RISCV64) # TODO i#3544: Port tests to RISC-V 64
+  return()
+endif (RISCV64)
+
 # To match Makefiles and have just one build type per configured build
 # dir, we collapse VS generator configs to a single choice.
 # This must be done prior to the project() command and the var
@@ -54,6 +58,8 @@ else ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
 endif ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
 
 project(DynamoRIO_samples)
+
+include(CheckIncludeFile)
 
 if ("${CMAKE_VERSION}" VERSION_EQUAL "3.9" OR
    "${CMAKE_VERSION}" VERSION_GREATER "3.9")

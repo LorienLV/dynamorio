@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2001-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -69,13 +69,14 @@ instr_encode_arch(dcontext_t *dcontext, instr_t *instr, byte *copy_pc, byte *fin
                   bool *has_instr_opnds /*OUT OPTIONAL*/
                       _IF_DEBUG(bool assert_reachable));
 
-#ifdef AARCH64
+#if defined(AARCH64) || defined(RISCV64)
 /* exported
  */
 bool
 instr_is_encoding_possible(instr_t *instr)
 {
     decode_info_t di;
+    decode_info_init_for_instr(&di, instr);
 
     return encoding_possible(&di, instr, NULL);
 }

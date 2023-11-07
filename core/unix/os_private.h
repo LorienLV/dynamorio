@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2008-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -80,12 +80,22 @@
 #    define ASM_R3 "r3"
 #    define ASM_XSP "sp"
 #    define ASM_INDJMP "bx"
+#elif defined(DR_HOST_RISCV64)
+#    define ASM_R0 "a0"
+#    define ASM_R1 "a1"
+#    define ASM_R2 "a2"
+#    define ASM_R3 "a3"
+#    define ASM_XSP "sp"
+#    define ASM_INDJMP "jr"
 #endif /* X86/ARM */
 
 #define MACHINE_TLS_IS_DR_TLS IF_X86_ELSE(INTERNAL_OPTION(mangle_app_seg), true)
 
-/* PR 212090: the signal we use to suspend threads */
-#define SUSPEND_SIGNAL SIGUSR2
+/* The signal we use to suspend threads.
+ * It may equal NUDGESIG_SIGNUM.
+ */
+extern int suspend_signum;
+#define SUSPEND_SIGNAL suspend_signum
 
 #ifdef MACOS
 /* While there is no clone system call, we use the same clone flags to share
@@ -269,6 +279,9 @@ os_walk_address_space(memquery_iter_t *iter, bool add_modules);
 bool
 is_sigreturn_syscall_number(int sysnum);
 
+bool
+is_sigqueue_supported(void);
+
 /* in signal.c */
 struct _kernel_sigaction_t;
 typedef struct _kernel_sigaction_t kernel_sigaction_t;
@@ -350,8 +363,8 @@ handle_sigaltstack(dcontext_t *dcontext, const stack_t *stack, stack_t *old_stac
 
 bool
 handle_sigprocmask(dcontext_t *dcontext, int how, kernel_sigset_t *set,
-                   kernel_sigset_t *oset, size_t sigsetsize);
-void
+                   kernel_sigset_t *oset, size_t sigsetsize, uint *error_code);
+int
 handle_post_sigprocmask(dcontext_t *dcontext, int how, kernel_sigset_t *set,
                         kernel_sigset_t *oset, size_t sigsetsize);
 void
@@ -394,6 +407,9 @@ os_terminate_via_signal(dcontext_t *dcontext, terminate_flags_t flags, int sig);
 
 bool
 thread_signal(process_id_t pid, thread_id_t tid, int signum);
+
+bool
+thread_signal_queue(process_id_t pid, thread_id_t tid, int signum, void *value);
 
 void
 start_itimer(dcontext_t *dcontext);
@@ -456,7 +472,7 @@ init_android_version(void);
 
 /* in nudgesig.c */
 bool
-create_nudge_signal_payload(kernel_siginfo_t *info OUT, uint action_mask,
+create_nudge_signal_payload(kernel_siginfo_t *info OUT, uint action_mask, uint flags,
                             client_id_t client_id, uint64 client_arg);
 
 #ifdef X86

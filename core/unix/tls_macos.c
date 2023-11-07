@@ -1,5 +1,5 @@
 /* *******************************************************************************
- * Copyright (c) 2013-2019 Google, Inc.  All rights reserved.
+ * Copyright (c) 2013-2023 Google, Inc.  All rights reserved.
  * *******************************************************************************/
 
 /*
@@ -65,7 +65,7 @@
 static uint tls_app_index;
 
 #ifdef X64
-static pthread_key_t keys_start;
+static pthread_key_t keys_start = 0;
 
 static pthread_key_t
 tls_alloc_key(void)
@@ -130,6 +130,7 @@ tls_process_init(void)
                                         "Slots are not contiguous.");
             ASSERT_NOT_REACHED();
         }
+        pthread_setspecific(key, NULL);
     }
     if (delete_start > 0) {
         for (pthread_key_t key = delete_start; key <= delete_end; key++) {
@@ -173,6 +174,10 @@ tls_get_dr_offs(void)
 byte *
 tls_get_dr_addr(void)
 {
+    if (keys_start == 0) {
+        // tls not initialized.
+        return NULL;
+    }
     byte *seg_base = get_segment_base(TLS_REG_LIB);
     return seg_base + keys_start * sizeof(void *);
 }
@@ -180,11 +185,20 @@ tls_get_dr_addr(void)
 byte **
 get_app_tls_swap_slot_addr(void)
 {
-    byte **app_tls_base = (byte **)read_thread_register(TLS_REG_LIB);
+    byte *app_tls_base = (byte *)read_thread_register(TLS_REG_LIB);
     if (app_tls_base == NULL) {
         ASSERT_NOT_IMPLEMENTED(false);
     }
     return (byte **)(app_tls_base + DR_TLS_BASE_OFFSET);
+}
+#endif
+
+#ifdef AARCH64
+/* Shared with Linux AArch64 code. */
+byte **
+get_dr_tls_base_addr(void)
+{
+    return get_app_tls_swap_slot_addr();
 }
 #endif
 
@@ -194,7 +208,12 @@ tls_thread_init(os_local_state_t *os_tls, byte *segment)
 #ifdef X64
     /* For now we have both a directly-addressable os_local_state_t and a pointer to
      * it in slot 6.  If we settle on always doing the full os_local_state_t in slots,
-     * we would probably get rid of the use of slot 6.
+     * we would probably get rid of the use of slot 6 on x86 (on aarch64 the
+     * os_local_state_t slots are not directly addressible; we rely on the stolen
+     * register, whose value is populated from the pointer in slot 6 -- which could
+     * be moved to a slot right before os_local_state_t or something I suppose, or
+     * we could move the whole os_local_state_t to our own mmap since we access
+     * through a pointer anyway).
      */
     byte **tls_swap_slot;
     ASSERT((byte *)(os_tls->self) == segment);
@@ -267,11 +286,10 @@ tls_thread_free(tls_type_t tls_type, int index)
 {
 #ifdef X64
     byte **tls_swap_slot;
-    os_local_state_t *os_tls;
     ASSERT(tls_type == TLS_TYPE_SLOT);
     tls_swap_slot = get_app_tls_swap_slot_addr();
     ASSERT(tls_swap_slot != NULL);
-    os_tls = (os_local_state_t *)*tls_swap_slot;
+    DEBUG_DECLARE(os_local_state_t *os_tls = (os_local_state_t *)*tls_swap_slot;)
     ASSERT(os_tls->self == os_tls);
     *tls_swap_slot = TLS_SLOT_VAL_EXITED;
 #else
@@ -283,6 +301,7 @@ tls_thread_free(tls_type_t tls_type, int index)
 #endif
 }
 
+#ifndef AARCHXX
 /* Assumes it's passed either SEG_FS or SEG_GS.
  * Returns POINTER_MAX on failure.
  */
@@ -297,6 +316,7 @@ tls_get_fs_gs_segment_base(uint seg)
 
     IF_X64(ASSERT_NOT_REACHED()); /* Not used for x64. */
 
+#    ifdef X86
     if (seg != SEG_FS && seg != SEG_GS)
         return (byte *)POINTER_MAX;
 
@@ -324,6 +344,7 @@ tls_get_fs_gs_segment_base(uint seg)
                     ((ptr_uint_t)ldt.data.base16 << 16) | (ptr_uint_t)ldt.data.base00);
     LOG(THREAD_GET, LOG_THREADS, 4, "%s => base " PFX "\n", __FUNCTION__, base);
     return base;
+#    endif
 }
 
 /* Assumes it's passed either SEG_FS or SEG_GS.
@@ -340,6 +361,7 @@ tls_set_fs_gs_segment_base(tls_type_t tls_type, uint seg,
     ASSERT_NOT_IMPLEMENTED(false);
     return false;
 }
+#endif
 
 void
 tls_init_descriptor(our_modify_ldt_t *desc OUT, void *base, size_t size, uint index)

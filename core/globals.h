@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -126,6 +126,32 @@
 #    define DR_UNS_API /* nothing */
 #endif
 
+#ifdef WINDOWS
+#    define DISABLE_NULL_SANITIZER
+#else
+/* As per https://gcc.gnu.org/onlinedocs/cpp/_005f_005fhas_005fattribute.html,
+ * we need to first check whether __has_attribute is defined, to ensure
+ * portability. We saw issues in the Android-ARM cross compile without this.
+ */
+#    if defined __has_attribute
+#        if __has_attribute(__no_sanitize__) && defined(HAVE_FNOSANITIZE_NULL)
+/* The null sanitizer adds is-null checks for pointer dereferences. As part
+ * of this, it stores and retrieves pointers from the stack frame. Each
+ * pointer dereference uses a different stack location. So, if there are too
+ * many pointer dereferences in a function (like dump_global_stats and
+ * dump_thread_stats) it will increase the size of the stack frame a lot
+ * (127KB and 147KB respectively for the mentioned examples) when the null
+ * sanitizer is enabled. The following macro lets us disable this check for
+ * methods annotated with it.
+ */
+#            define DISABLE_NULL_SANITIZER __attribute__((no_sanitize("null")))
+#        endif
+#    endif
+#    ifndef DISABLE_NULL_SANITIZER
+#        define DISABLE_NULL_SANITIZER
+#    endif
+#endif
+
 #define INLINE_ONCE inline
 
 #include <stdlib.h>
@@ -190,8 +216,8 @@ typedef byte *cache_pc; /* fragment cache pc */
 #endif
 
 /* make sure defines are consistent */
-#if !defined(X86) && !defined(ARM) && !defined(AARCH64)
-#    error Must define X86, ARM or AARCH64: no other platforms are supported
+#if !defined(X86) && !defined(ARM) && !defined(AARCH64) && !defined(RISCV64)
+#    error Must define X86, ARM, AARCH64 or RISCV64: no other platforms are supported
 #endif
 
 #if defined(PAPI) && defined(WINDOWS)
@@ -271,7 +297,16 @@ typedef struct _thread_record_t {
 #    define DYNAMORIO_EXPORT DR_APP_API
 #endif
 
+/* AArch64 Scalable Vector Extension's vector length in bits. This depends on
+ * the hardware implementation and can be one of:
+ * 128 256 384 512 640 768 896 1024 1152 1280 1408 1536 1664 1792 1920 2048
+ * See https://developer.arm.com/documentation/102476/0100/Introducing-SVE
+ * This variable stores the length for off-line decoding.
+ */
+extern int sve_veclen;
+
 #include "heap.h"
+#include "options_struct.h"
 #include "utils.h"
 #include "options.h"
 #include "os_exports.h"
@@ -404,6 +439,12 @@ extern bool dynamo_exited_log_and_stats; /* are stats and logfile shut down? */
 #endif
 extern bool dynamo_resetting;           /* in middle of global reset? */
 extern bool dynamo_all_threads_synched; /* are all other threads suspended safely? */
+/* This indicates mostly whether there might be other threads in the process when
+ * DR initializes, which equates to attaching (vs being launched by DR) on Linux.
+ * On Windows though we can't really tell the difference due to our late injection,
+ * so this is always set on Windows.
+ */
+extern bool dynamo_control_via_attach;
 /* Not guarded by DR_APP_EXPORTS because later detach implementations might not
  * go through the app interface.
  */
@@ -661,7 +702,7 @@ extern thread_id_t global_try_tid;
 
 typedef struct {
     /* WARNING: if you change the offsets of any of these fields,
-     * you must also change the offsets in <arch>/<arch.s>
+     * you must also change the offsets in <arch>/<arch.asm>
      */
     priv_mcontext_t mcontext; /* real machine context (in globals_shared.h + mcxtx.h) */
 #ifdef UNIX
@@ -1161,7 +1202,9 @@ strtoul(const char *str, char **end, int base);
 #    define sigaltstack sigaltstack_forbidden_function
 #    define setitimer setitimer_forbidden_function
 #    define _exit _exit_forbidden_function
-#    define gettimeofday gettimeofday_forbidden_function
+#    if !(defined(MACOS) && defined(AARCH64))
+#        define gettimeofday gettimeofday_forbidden_function
+#    endif
 #    define time time_forbidden_function
 #    define modify_ldt modify_ldt_forbidden_function
 #endif

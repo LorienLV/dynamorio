@@ -1,5 +1,5 @@
 /* ***************************************************************************
- * Copyright (c) 2012-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2012-2023 Google, Inc.  All rights reserved.
  * ***************************************************************************/
 
 /*
@@ -58,6 +58,11 @@
 #include "drtable.h"
 #include "modules.h"
 #include "drcovlib_private.h"
+#ifdef LINUX
+#    include "../../core/unix/include/syscall.h"
+#elif defined(UNIX)
+#    include <sys/syscall.h>
+#endif
 #include <limits.h>
 #include <string.h>
 
@@ -79,9 +84,6 @@ typedef struct _per_thread_t {
 
 static per_thread_t *global_data;
 static bool drcov_per_thread = false;
-#ifndef WINDOWS
-static int sysnum_execve = IF_X64_ELSE(59, 11);
-#endif
 static volatile bool go_native;
 static int tls_idx = -1;
 static int drcovlib_init_count;
@@ -139,7 +141,14 @@ bb_table_print(void *drcontext, per_thread_t *data)
         ASSERT(false, "invalid log file");
         return;
     }
-    dr_fprintf(data->log, "BB Table: %u bbs\n", drtable_num_entries(data->bb_table));
+    /* We do not support >32U-bit-max (~4 billion) blocks.
+     * drcov2lcov would need a number of changes to support this.
+     * We have a debug-build check here.
+     */
+    ASSERT(drtable_num_entries(data->bb_table) <= UINT_MAX,
+           "block count exceeds 32-bit max");
+    dr_fprintf(data->log, "BB Table: %u bbs\n",
+               (uint)drtable_num_entries(data->bb_table));
     if (TEST(DRCOVLIB_DUMP_AS_TEXT, options.flags)) {
         dr_fprintf(data->log, "module id, start, size:\n");
         drtable_iterate(data->bb_table, data, bb_table_entry_print);
@@ -291,7 +300,7 @@ event_filter_syscall(void *drcontext, int sysnum)
 #ifdef WINDOWS
     return false;
 #else
-    return sysnum == sysnum_execve;
+    return sysnum == SYS_execve;
 #endif
 }
 
@@ -299,7 +308,7 @@ static bool
 event_pre_syscall(void *drcontext, int sysnum)
 {
 #ifdef UNIX
-    if (sysnum == sysnum_execve) {
+    if (sysnum == SYS_execve) {
         /* for !drcov_per_thread, the per-thread data is a copy of global data */
         per_thread_t *data = (per_thread_t *)drmgr_get_tls_field(drcontext, tls_idx);
         ASSERT(data != NULL, "data must not be NULL");
@@ -307,6 +316,7 @@ event_pre_syscall(void *drcontext, int sysnum)
             drcontext = NULL;
         /* We only dump the data but do not free any memory.
          * XXX: for drcov_per_thread, we only dump the current thread.
+         * XXX: We don't handle the syscall failing.
          */
         dump_drcov_data(drcontext, data);
         /* TODO: add execve test.

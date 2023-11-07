@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -80,21 +80,47 @@
 
 /* used for VEX decoding */
 #define xx TYPE_NONE, OPSZ_NA
-static const instr_info_t escape_instr = { ESCAPE, 0x000000, "(bad)", xx, xx, xx,
-                                           xx,     xx,       0,       0,  0 };
-static const instr_info_t escape_38_instr = {
-    ESCAPE_3BYTE_38, 0x000000, "(bad)", xx, xx, xx, xx, xx, 0, 0, 0
+static const instr_info_t escape_instr = {
+    ESCAPE, 0x000000, DR_INSTR_CATEGORY_UNCATEGORIZED, "(bad)", xx, xx, xx, xx, xx, 0,
+    0,      0
 };
-static const instr_info_t escape_3a_instr = {
-    ESCAPE_3BYTE_3a, 0x000000, "(bad)", xx, xx, xx, xx, xx, 0, 0, 0
-};
+static const instr_info_t escape_38_instr = { ESCAPE_3BYTE_38,
+                                              0x000000,
+                                              DR_INSTR_CATEGORY_UNCATEGORIZED,
+                                              "(bad)",
+                                              xx,
+                                              xx,
+                                              xx,
+                                              xx,
+                                              xx,
+                                              0,
+                                              0,
+                                              0 };
+static const instr_info_t escape_3a_instr = { ESCAPE_3BYTE_3a,
+                                              0x000000,
+                                              DR_INSTR_CATEGORY_UNCATEGORIZED,
+                                              "(bad)",
+                                              xx,
+                                              xx,
+                                              xx,
+                                              xx,
+                                              xx,
+                                              0,
+                                              0,
+                                              0 };
 /* used for XOP decoding */
-static const instr_info_t xop_8_instr = { XOP_8_EXT, 0x000000, "(bad)", xx, xx, xx,
-                                          xx,        xx,       0,       0,  0 };
-static const instr_info_t xop_9_instr = { XOP_9_EXT, 0x000000, "(bad)", xx, xx, xx,
-                                          xx,        xx,       0,       0,  0 };
-static const instr_info_t xop_a_instr = { XOP_A_EXT, 0x000000, "(bad)", xx, xx, xx,
-                                          xx,        xx,       0,       0,  0 };
+static const instr_info_t xop_8_instr = {
+    XOP_8_EXT, 0x000000, DR_INSTR_CATEGORY_UNCATEGORIZED, "(bad)", xx, xx, xx, xx, xx, 0,
+    0,         0
+};
+static const instr_info_t xop_9_instr = {
+    XOP_9_EXT, 0x000000, DR_INSTR_CATEGORY_UNCATEGORIZED, "(bad)", xx, xx, xx, xx, xx, 0,
+    0,         0
+};
+static const instr_info_t xop_a_instr = {
+    XOP_A_EXT, 0x000000, DR_INSTR_CATEGORY_UNCATEGORIZED, "(bad)", xx, xx, xx, xx, xx, 0,
+    0,         0
+};
 #undef xx
 
 bool
@@ -420,7 +446,7 @@ read_immed(byte *pc, decode_info_t *di, opnd_size_t size, ptr_int_t *result)
      */
     switch (size) {
     case OPSZ_1:
-        *result = (ptr_int_t)(char)*pc; /* sign-extend */
+        *result = (ptr_int_t)(sbyte)*pc; /* sign-extend */
         pc++;
         break;
     case OPSZ_2:
@@ -584,7 +610,7 @@ read_modrm(byte *pc, decode_info_t *di)
         } else if (di->mod == 1) {
             /* 1-byte disp */
             di->has_disp = true;
-            di->disp = (int)(char)*pc; /* sign-extend */
+            di->disp = (int)(sbyte)*pc; /* sign-extend */
             pc++;
         } else {
             di->has_disp = false;
@@ -617,7 +643,7 @@ read_modrm(byte *pc, decode_info_t *di)
         } else if (di->mod == 1) {
             /* 1-byte disp */
             di->has_disp = true;
-            di->disp = (int)(char)*pc; /* sign-extend */
+            di->disp = (int)(sbyte)*pc; /* sign-extend */
             pc++;
         } else {
             di->has_disp = false;
@@ -880,6 +906,7 @@ read_prefix_ext(const instr_info_t *info, decode_info_t *di)
     int code = (int)info->code;
     /* The order here matters: rep, then repne, then data (i#2431). */
     int idx = (di->rep_prefix ? 1 : (di->repne_prefix ? 3 : (di->data_prefix ? 2 : 0)));
+    ASSERT(!(di->rep_prefix && di->repne_prefix));
     if (di->vex_encoded)
         idx += 4;
     else if (di->evex_encoded)
@@ -1014,14 +1041,17 @@ read_instruction(byte *pc, byte *orig_pc, const instr_info_t **ret_info,
             if (info->code == PREFIX_REP) {
                 /* see if used as part of opcode before considering prefix */
                 di->rep_prefix = true;
+                di->repne_prefix = false;
             } else if (info->code == PREFIX_REPNE) {
                 /* see if used as part of opcode before considering prefix */
                 di->repne_prefix = true;
+                di->rep_prefix = false;
             } else if (REG_START_SEGMENT <= info->code &&
                        info->code <= REG_STOP_SEGMENT) {
                 CLIENT_ASSERT_TRUNCATE(di->seg_override, ushort, info->code,
                                        "decode error: invalid segment override");
-                di->seg_override = (reg_id_t)info->code;
+                if (!X64_MODE(di) || REG_START_SEGMENT_x64 <= info->code)
+                    di->seg_override = (reg_id_t)info->code;
             } else if (info->code == PREFIX_DATA) {
                 /* see if used as part of opcode before considering prefix */
                 di->data_prefix = true;
@@ -1755,7 +1785,12 @@ decode_modrm(decode_info_t *di, byte optype, opnd_size_t opsize, opnd_t *reg_opn
         int compressed_disp_scale = 0;
         if (di->evex_encoded) {
             compressed_disp_scale = decode_get_compressed_disp_scale(di);
-            needs_full_disp = disp % compressed_disp_scale != 0;
+            if (compressed_disp_scale == -1)
+                return false;
+            if (di->mod == 1)
+                disp *= compressed_disp_scale;
+            else
+                needs_full_disp = disp % compressed_disp_scale != 0;
         }
         force_full_disp = !needs_full_disp && di->has_disp && disp >= INT8_MIN &&
             disp <= INT8_MAX && di->mod == 2;
@@ -1770,10 +1805,6 @@ decode_modrm(decode_info_t *di, byte optype, opnd_size_t opsize, opnd_t *reg_opn
              * specify a segment selector and address.  The opcode must be
              * examined to know how to interpret those 6 bytes.
              */
-            if (di->evex_encoded) {
-                if (di->mod == 1)
-                    disp *= compressed_disp_scale;
-            }
             *rm_opnd = opnd_create_base_disp_ex(base_reg, index_reg, scale, disp,
                                                 resolve_variable_size(di, opsize, false),
                                                 encode_zero_disp, force_full_disp,
@@ -2193,9 +2224,14 @@ dr_pred_type_t
 decode_predicate_from_instr_info(uint opcode, const instr_info_t *info)
 {
     if (TESTANY(HAS_PRED_CC | HAS_PRED_COMPLEX, info->flags)) {
-        if (TEST(HAS_PRED_CC, info->flags))
-            return DR_PRED_O + instr_cmovcc_to_jcc(opcode) - OP_jo;
-        else
+        if (TEST(HAS_PRED_CC, info->flags)) {
+            if (opcode >= OP_jo && opcode <= OP_jnle)
+                return DR_PRED_O + opcode - OP_jo;
+            else if (opcode >= OP_jo_short && opcode <= OP_jnle_short)
+                return DR_PRED_O + opcode - OP_jo_short;
+            else
+                return DR_PRED_O + instr_cmovcc_to_jcc(opcode) - OP_jo;
+        } else
             return DR_PRED_COMPLEX;
     }
     return DR_PRED_NONE;
@@ -2398,6 +2434,34 @@ decode_get_tuple_type_input_size(const instr_info_t *info, decode_info_t *di)
         di->input_size = OPSZ_8;
     else
         di->input_size = OPSZ_NA;
+}
+
+/* TODO i#6238: Not all opcodes have been reviewed.
+ * In case an opcode has not been reviewed,
+ * the default category assigned to it is DR_INSTR_CATEGORY_UNCATEGORIZED.
+ */
+static inline void
+decode_category(instr_t *instr)
+{
+    if (instr != NULL) {
+        if (op_instr[instr->opcode] != NULL) {
+            uint category = op_instr[instr->opcode]->category;
+            if (instr_operands_valid(instr)) {
+                if (instr_reads_memory(instr)) {
+                    category |= DR_INSTR_CATEGORY_LOAD;
+                    category &= ~DR_INSTR_CATEGORY_MOVE;
+                }
+                if (instr_writes_memory(instr)) {
+                    category |= DR_INSTR_CATEGORY_STORE;
+                    category &= ~DR_INSTR_CATEGORY_MOVE;
+                }
+            }
+            instr_set_category(instr, category);
+        } else {
+            /* nonvalid opcode */
+            instr_set_category(instr, DR_INSTR_CATEGORY_UNCATEGORIZED);
+        }
+    }
 }
 
 /****************************************************************************
@@ -2674,6 +2738,8 @@ decode_common(dcontext_t *dcontext, byte *pc, byte *orig_pc, instr_t *instr)
         /* We must do this AFTER setting raw bits to avoid being invalidated. */
         instr_set_rip_rel_pos(instr, (int)(di.disp_abs - di.start_pc));
     }
+
+    decode_category(instr);
 
     return next_pc;
 

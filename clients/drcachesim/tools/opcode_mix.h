@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2018-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2018-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -33,16 +33,30 @@
 #ifndef _OPCODE_MIX_H_
 #define _OPCODE_MIX_H_ 1
 
+#include <stddef.h>
+#include <stdint.h>
+
+#include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
 
+#include "dr_api.h" // Must be before trace_entry.h from analysis_tool.h.
 #include "analysis_tool.h"
+#include "memref.h"
 #include "raw2trace.h"
 #include "raw2trace_directory.h"
+#include "trace_entry.h"
+
+namespace dynamorio {
+namespace drmemtrace {
 
 class opcode_mix_t : public analysis_tool_t {
 public:
+    // The module_file_path is optional and unused for traces with
+    // OFFLINE_FILE_TYPE_ENCODINGS.
+    // XXX: Once we update our toolchains to guarantee C++17 support we could use
+    // std::optional here.
     opcode_mix_t(const std::string &module_file_path, unsigned int verbose,
                  const std::string &alt_module_dir = "");
     virtual ~opcode_mix_t();
@@ -87,12 +101,13 @@ protected:
         {
         }
         worker_data_t *worker;
-        int_least64_t instr_count;
-        std::unordered_map<int, int_least64_t> opcode_counts;
+        int64_t instr_count;
+        std::unordered_map<int, int64_t> opcode_counts;
         std::string error;
         app_pc last_trace_module_start;
         size_t last_trace_module_size;
         app_pc last_mapped_module_start;
+        offline_file_type_t filetype = OFFLINE_FILE_TYPE_DEFAULT;
     };
 
     struct dcontext_cleanup_last_t {
@@ -109,13 +124,17 @@ protected:
      * destroying the other fields which may use DR heap.
      */
     dcontext_cleanup_last_t dcontext_;
+
+    // These are all optional and unused for OFFLINE_FILE_TYPE_ENCODINGS.
+    // XXX: Once we update our toolchains to guarantee C++17 support we could use
+    // std::optional here.
     std::string module_file_path_;
     std::unique_ptr<module_mapper_t> module_mapper_;
     std::mutex mapper_mutex_;
-
     // We reference directory.modfile_bytes throughout operation, so its lifetime
     // must match ours.
     raw2trace_directory_t directory_;
+
     std::unordered_map<memref_tid_t, shard_data_t *> shard_map_;
     // This mutex is only needed in parallel_shard_init.  In all other accesses to
     // shard_map (process_memref, print_results) we are single-threaded.
@@ -127,5 +146,8 @@ protected:
     worker_data_t serial_worker_;
     shard_data_t serial_shard_;
 };
+
+} // namespace drmemtrace
+} // namespace dynamorio
 
 #endif /* _OPCODE_MIX_H_ */

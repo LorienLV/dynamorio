@@ -24,18 +24,10 @@ adds   %x1 $0x0fff lsl $0x00 -> %x0
 adds   %w1 %w2 uxtb $0x00 -> %w0
 adds   %w1 %w2 uxth $0x01 -> %w0
 adds   %w1 %w2 uxtw $0x02 -> %w0
-adds   %w1 %w2 uxtx $0x03 -> %w0
 adds   %w1 %w2 sxtb $0x04 -> %w0
 adds   %w1 %w2 sxth $0x00 -> %w0
 adds   %w1 %w2 sxtw $0x01 -> %w0
-adds   %w1 %w2 sxtx $0x02 -> %w0
-adds   %x1 %x2 uxtb $0x00 -> %x0
-adds   %x1 %x2 uxth $0x01 -> %x0
-adds   %x1 %x2 uxtw $0x02 -> %x0
 adds   %x1 %x2 uxtx $0x03 -> %x0
-adds   %x1 %x2 sxtb $0x04 -> %x0
-adds   %x1 %x2 sxth $0x00 -> %x0
-adds   %x1 %x2 sxtw $0x01 -> %x0
 adds   %x1 %x2 sxtx $0x02 -> %x0
 test_add complete
 ldar   (%x1)[4byte] -> %w0
@@ -43,6 +35,11 @@ ldar   (%x1)[8byte] -> %x0
 ldarb  (%x1)[1byte] -> %w0
 ldarh  (%x1)[2byte] -> %w0
 test_ldar complete
+ldapr  (%x1)[4byte] -> %w0
+ldapr  (%x3)[8byte] -> %x2
+ldaprb (%x5)[1byte] -> %w4
+ldaprh (%x7)[2byte] -> %w6
+test_ldapr complete
 ldur   (%x0)[1byte] -> %b0
 ldur   +0xff(%x1)[1byte] -> %b1
 ldur   (%x2)[2byte] -> %h2
@@ -73,7 +70,7 @@ fmov   %w9 -> %h10
 fmov   %w4 -> %s14
 fmov   %x8 -> %h23
 fmov   %x24 -> %d6
-fmov   %x10 -> %q9
+fmov   %x10 $0x03 -> %q9 $0x01
 test_fmov_general complete
 fmov   $1.000000 $0x01 -> %q1
 fmov   $2.000000 $0x01 -> %q1
@@ -326,8 +323,6 @@ fmulx  %q22 %q20 $0x03 -> %q30
 fcmeq  %d14 %d0 $0x02 -> %d27
 fcmeq  %q14 %q0 $0x02 -> %q27
 fcmeq  %q14 %q0 $0x03 -> %q27
-fmlal  %d0 %d29 %d31 -> %d0
-fmlal  %q0 %q29 %q31 -> %q0
 fmax   %d21 %d20 $0x02 -> %d2
 fmax   %q21 %q20 $0x02 -> %q2
 fmax   %q21 %q20 $0x03 -> %q2
@@ -347,8 +342,6 @@ fmls   %q4 %q31 %q29 $0x03 -> %q4
 fsub   %d8 %d26 $0x02 -> %d25
 fsub   %q8 %q26 $0x02 -> %q25
 fsub   %q8 %q26 $0x03 -> %q25
-fmlsl  %d0 %d29 %d31 -> %d0
-fmlsl  %q0 %q29 %q31 -> %q0
 fmin   %d24 %d31 $0x02 -> %d22
 fmin   %q24 %q31 $0x02 -> %q22
 fmin   %q24 %q31 $0x03 -> %q22
@@ -498,8 +491,6 @@ sqrdmulh %q29 %q27 $0x02 -> %q23
 fmaxnmp %d18 %d29 $0x02 -> %d12
 fmaxnmp %q18 %q29 $0x02 -> %q12
 fmaxnmp %q18 %q29 $0x03 -> %q12
-fmlal2 %d0 %d29 %d31 -> %d0
-fmlal2 %q0 %q29 %q31 -> %q0
 faddp  %d31 %d16 $0x02 -> %d18
 faddp  %q31 %q16 $0x02 -> %q18
 faddp  %q31 %q16 $0x03 -> %q18
@@ -525,8 +516,6 @@ bsl    %q4 %q25 -> %q20
 fminnmp %d18 %d11 $0x02 -> %d23
 fminnmp %q18 %q11 $0x02 -> %q23
 fminnmp %q18 %q11 $0x03 -> %q23
-fmlsl2 %d0 %d29 %d31 -> %d0
-fmlsl2 %q0 %q29 %q31 -> %q0
 fabd   %d10 %d19 $0x02 -> %d15
 fabd   %q10 %q19 $0x02 -> %q15
 fabd   %q10 %q19 $0x03 -> %q15
@@ -544,22 +533,22 @@ bit    %q21 %q12 -> %q12
 bif    %d3 %d3 -> %d20
 bif    %q3 %q3 -> %q20
 test_asimdsame complete
-ld1    (%x0)[8byte] $0x00 -> %q0
+ld1    (%x0)[8byte] $0x00 -> %d0
 ld1    (%x0)[16byte] $0x00 -> %q0
-ld1    (%x0)[4byte] $0x01 -> %q0
-ld1    (%x0)[8byte] $0x01 -> %q0
-ld1    (%x0)[2byte] $0x02 -> %q0
-ld1    (%x0)[4byte] $0x02 -> %q0
-ld1    (%x0)[1byte] $0x03 -> %q0
-ld1    (%x0)[2byte] $0x03 -> %q0
-st1    %q0 $0x00 -> (%x0)[8byte]
+ld1    (%x0)[8byte] $0x01 -> %d0
+ld1    (%x0)[16byte] $0x01 -> %q0
+ld1    (%x0)[8byte] $0x02 -> %d0
+ld1    (%x0)[16byte] $0x02 -> %q0
+ld1    (%x0)[8byte] $0x03 -> %d0
+ld1    (%x0)[16byte] $0x03 -> %q0
+st1    %d0 $0x00 -> (%x0)[8byte]
 st1    %q0 $0x00 -> (%x0)[16byte]
-st1    %q0 $0x01 -> (%x0)[4byte]
-st1    %q0 $0x01 -> (%x0)[8byte]
-st1    %q0 $0x02 -> (%x0)[2byte]
-st1    %q0 $0x02 -> (%x0)[4byte]
-st1    %q0 $0x03 -> (%x0)[1byte]
-st1    %q0 $0x03 -> (%x0)[2byte]
+st1    %d0 $0x01 -> (%x0)[8byte]
+st1    %q0 $0x01 -> (%x0)[16byte]
+st1    %d0 $0x02 -> (%x0)[8byte]
+st1    %q0 $0x02 -> (%x0)[16byte]
+st1    %d0 $0x03 -> (%x0)[8byte]
+st1    %q0 $0x03 -> (%x0)[16byte]
 test_asimd_mem complete
 fmov   %d27 -> %d2
 fmov   %s27 -> %s2
@@ -642,48 +631,6 @@ fnmsub %d15 %d23 %d2 -> %d4
 fnmsub %s15 %s23 %s2 -> %s4
 fnmsub %h15 %h23 %h2 -> %h4
 test_floatdp3 complete
-orr    %p7 %z2 %z13 $0x00 -> %z2
-orr    %p7 %z2 %z13 $0x01 -> %z2
-orr    %p7 %z2 %z13 $0x02 -> %z2
-orr    %p7 %z2 %z13 $0x03 -> %z2
-eor    %p4 %z29 %z2 $0x00 -> %z29
-eor    %p4 %z29 %z2 $0x01 -> %z29
-eor    %p4 %z29 %z2 $0x02 -> %z29
-eor    %p4 %z29 %z2 $0x03 -> %z29
-and    %p1 %z31 %z23 $0x00 -> %z31
-and    %p1 %z31 %z23 $0x01 -> %z31
-and    %p1 %z31 %z23 $0x02 -> %z31
-and    %p1 %z31 %z23 $0x03 -> %z31
-bic    %p2 %z2 %z24 $0x00 -> %z2
-bic    %p2 %z2 %z24 $0x01 -> %z2
-bic    %p2 %z2 %z24 $0x02 -> %z2
-bic    %p2 %z2 %z24 $0x03 -> %z2
-test_sve_int_bin_pred_log complete
-add    %z27 %z30 $0x00 -> %z2
-add    %z27 %z30 $0x01 -> %z2
-add    %z27 %z30 $0x02 -> %z2
-add    %z27 %z30 $0x03 -> %z2
-sub    %z13 %z29 $0x00 -> %z0
-sub    %z13 %z29 $0x01 -> %z0
-sub    %z13 %z29 $0x02 -> %z0
-sub    %z13 %z29 $0x03 -> %z0
-sqadd  %z17 %z10 $0x00 -> %z31
-sqadd  %z17 %z10 $0x01 -> %z31
-sqadd  %z17 %z10 $0x02 -> %z31
-sqadd  %z17 %z10 $0x03 -> %z31
-uqadd  %z31 %z20 $0x00 -> %z2
-uqadd  %z31 %z20 $0x01 -> %z2
-uqadd  %z31 %z20 $0x02 -> %z2
-uqadd  %z31 %z20 $0x03 -> %z2
-sqsub  %z15 %z23 $0x00 -> %z4
-sqsub  %z15 %z23 $0x01 -> %z4
-sqsub  %z15 %z23 $0x02 -> %z4
-sqsub  %z15 %z23 $0x03 -> %z4
-uqsub  %z26 %z8 $0x00 -> %z2
-uqsub  %z26 %z8 $0x01 -> %z2
-uqsub  %z26 %z8 $0x02 -> %z2
-uqsub  %z26 %z8 $0x03 -> %z2
-test_sve_int_bin_cons_arit_0 complete
 saddl  %d13 %d18 $0x00 -> %q18
 saddl  %d13 %d18 $0x01 -> %q18
 saddl  %d13 %d18 $0x02 -> %q18
@@ -833,12 +780,297 @@ umull2 %q6 %q3 $0x00 -> %q6
 umull2 %q6 %q3 $0x01 -> %q6
 umull2 %q6 %q3 $0x02 -> %q6
 test_asimddiff complete
-sys    $0x1ba1 (%x0)[1byte]
-sys    $0x1bd1 (%x1)[1byte]
-sys    $0x1bd9 (%x29)[1byte]
-sys    $0x1bf1 (%x30)[1byte]
-sys    $0x1ba9 (%x1)[1byte]
-test_sys complete
+dc_zva  -> (%x0)[1byte]
+dc_zva  -> (%x0)[1byte]
+dc_zva  -> (%x1)[1byte]
+dc_zva  -> (%x2)[1byte]
+dc_zva  -> (%x3)[1byte]
+dc_zva  -> (%x4)[1byte]
+dc_zva  -> (%x5)[1byte]
+dc_zva  -> (%x6)[1byte]
+dc_zva  -> (%x7)[1byte]
+dc_zva  -> (%x8)[1byte]
+dc_zva  -> (%x9)[1byte]
+dc_zva  -> (%x10)[1byte]
+dc_zva  -> (%x11)[1byte]
+dc_zva  -> (%x12)[1byte]
+dc_zva  -> (%x13)[1byte]
+dc_zva  -> (%x14)[1byte]
+dc_zva  -> (%x15)[1byte]
+dc_zva  -> (%x16)[1byte]
+dc_zva  -> (%x17)[1byte]
+dc_zva  -> (%x18)[1byte]
+dc_zva  -> (%x19)[1byte]
+dc_zva  -> (%x20)[1byte]
+dc_zva  -> (%x21)[1byte]
+dc_zva  -> (%x22)[1byte]
+dc_zva  -> (%x23)[1byte]
+dc_zva  -> (%x24)[1byte]
+dc_zva  -> (%x25)[1byte]
+dc_zva  -> (%x26)[1byte]
+dc_zva  -> (%x27)[1byte]
+dc_zva  -> (%x28)[1byte]
+dc_zva  -> (%x29)[1byte]
+dc_zva  -> (%x30)[1byte]
+dc_cvac (%x0)[1byte]
+dc_cvac (%x0)[1byte]
+dc_cvac (%x1)[1byte]
+dc_cvac (%x2)[1byte]
+dc_cvac (%x3)[1byte]
+dc_cvac (%x4)[1byte]
+dc_cvac (%x5)[1byte]
+dc_cvac (%x6)[1byte]
+dc_cvac (%x7)[1byte]
+dc_cvac (%x8)[1byte]
+dc_cvac (%x9)[1byte]
+dc_cvac (%x10)[1byte]
+dc_cvac (%x11)[1byte]
+dc_cvac (%x12)[1byte]
+dc_cvac (%x13)[1byte]
+dc_cvac (%x14)[1byte]
+dc_cvac (%x15)[1byte]
+dc_cvac (%x16)[1byte]
+dc_cvac (%x17)[1byte]
+dc_cvac (%x18)[1byte]
+dc_cvac (%x19)[1byte]
+dc_cvac (%x20)[1byte]
+dc_cvac (%x21)[1byte]
+dc_cvac (%x22)[1byte]
+dc_cvac (%x23)[1byte]
+dc_cvac (%x24)[1byte]
+dc_cvac (%x25)[1byte]
+dc_cvac (%x26)[1byte]
+dc_cvac (%x27)[1byte]
+dc_cvac (%x28)[1byte]
+dc_cvac (%x29)[1byte]
+dc_cvac (%x30)[1byte]
+dc_cvau (%x0)[1byte]
+dc_cvau (%x0)[1byte]
+dc_cvau (%x1)[1byte]
+dc_cvau (%x2)[1byte]
+dc_cvau (%x3)[1byte]
+dc_cvau (%x4)[1byte]
+dc_cvau (%x5)[1byte]
+dc_cvau (%x6)[1byte]
+dc_cvau (%x7)[1byte]
+dc_cvau (%x8)[1byte]
+dc_cvau (%x9)[1byte]
+dc_cvau (%x10)[1byte]
+dc_cvau (%x11)[1byte]
+dc_cvau (%x12)[1byte]
+dc_cvau (%x13)[1byte]
+dc_cvau (%x14)[1byte]
+dc_cvau (%x15)[1byte]
+dc_cvau (%x16)[1byte]
+dc_cvau (%x17)[1byte]
+dc_cvau (%x18)[1byte]
+dc_cvau (%x19)[1byte]
+dc_cvau (%x20)[1byte]
+dc_cvau (%x21)[1byte]
+dc_cvau (%x22)[1byte]
+dc_cvau (%x23)[1byte]
+dc_cvau (%x24)[1byte]
+dc_cvau (%x25)[1byte]
+dc_cvau (%x26)[1byte]
+dc_cvau (%x27)[1byte]
+dc_cvau (%x28)[1byte]
+dc_cvau (%x29)[1byte]
+dc_cvau (%x30)[1byte]
+dc_civac (%x0)[1byte]
+dc_civac (%x0)[1byte]
+dc_civac (%x1)[1byte]
+dc_civac (%x2)[1byte]
+dc_civac (%x3)[1byte]
+dc_civac (%x4)[1byte]
+dc_civac (%x5)[1byte]
+dc_civac (%x6)[1byte]
+dc_civac (%x7)[1byte]
+dc_civac (%x8)[1byte]
+dc_civac (%x9)[1byte]
+dc_civac (%x10)[1byte]
+dc_civac (%x11)[1byte]
+dc_civac (%x12)[1byte]
+dc_civac (%x13)[1byte]
+dc_civac (%x14)[1byte]
+dc_civac (%x15)[1byte]
+dc_civac (%x16)[1byte]
+dc_civac (%x17)[1byte]
+dc_civac (%x18)[1byte]
+dc_civac (%x19)[1byte]
+dc_civac (%x20)[1byte]
+dc_civac (%x21)[1byte]
+dc_civac (%x22)[1byte]
+dc_civac (%x23)[1byte]
+dc_civac (%x24)[1byte]
+dc_civac (%x25)[1byte]
+dc_civac (%x26)[1byte]
+dc_civac (%x27)[1byte]
+dc_civac (%x28)[1byte]
+dc_civac (%x29)[1byte]
+dc_civac (%x30)[1byte]
+dc_ivac (%x0)[1byte]
+dc_ivac (%x0)[1byte]
+dc_ivac (%x1)[1byte]
+dc_ivac (%x2)[1byte]
+dc_ivac (%x3)[1byte]
+dc_ivac (%x4)[1byte]
+dc_ivac (%x5)[1byte]
+dc_ivac (%x6)[1byte]
+dc_ivac (%x7)[1byte]
+dc_ivac (%x8)[1byte]
+dc_ivac (%x9)[1byte]
+dc_ivac (%x10)[1byte]
+dc_ivac (%x11)[1byte]
+dc_ivac (%x12)[1byte]
+dc_ivac (%x13)[1byte]
+dc_ivac (%x14)[1byte]
+dc_ivac (%x15)[1byte]
+dc_ivac (%x16)[1byte]
+dc_ivac (%x17)[1byte]
+dc_ivac (%x18)[1byte]
+dc_ivac (%x19)[1byte]
+dc_ivac (%x20)[1byte]
+dc_ivac (%x21)[1byte]
+dc_ivac (%x22)[1byte]
+dc_ivac (%x23)[1byte]
+dc_ivac (%x24)[1byte]
+dc_ivac (%x25)[1byte]
+dc_ivac (%x26)[1byte]
+dc_ivac (%x27)[1byte]
+dc_ivac (%x28)[1byte]
+dc_ivac (%x29)[1byte]
+dc_ivac (%x30)[1byte]
+dc_isw %x0
+dc_isw %x0
+dc_isw %x1
+dc_isw %x2
+dc_isw %x3
+dc_isw %x4
+dc_isw %x5
+dc_isw %x6
+dc_isw %x7
+dc_isw %x8
+dc_isw %x9
+dc_isw %x10
+dc_isw %x11
+dc_isw %x12
+dc_isw %x13
+dc_isw %x14
+dc_isw %x15
+dc_isw %x16
+dc_isw %x17
+dc_isw %x18
+dc_isw %x19
+dc_isw %x20
+dc_isw %x21
+dc_isw %x22
+dc_isw %x23
+dc_isw %x24
+dc_isw %x25
+dc_isw %x26
+dc_isw %x27
+dc_isw %x28
+dc_isw %x29
+dc_isw %x30
+dc_csw %x0
+dc_csw %x0
+dc_csw %x1
+dc_csw %x2
+dc_csw %x3
+dc_csw %x4
+dc_csw %x5
+dc_csw %x6
+dc_csw %x7
+dc_csw %x8
+dc_csw %x9
+dc_csw %x10
+dc_csw %x11
+dc_csw %x12
+dc_csw %x13
+dc_csw %x14
+dc_csw %x15
+dc_csw %x16
+dc_csw %x17
+dc_csw %x18
+dc_csw %x19
+dc_csw %x20
+dc_csw %x21
+dc_csw %x22
+dc_csw %x23
+dc_csw %x24
+dc_csw %x25
+dc_csw %x26
+dc_csw %x27
+dc_csw %x28
+dc_csw %x29
+dc_csw %x30
+dc_cisw %x0
+dc_cisw %x0
+dc_cisw %x1
+dc_cisw %x2
+dc_cisw %x3
+dc_cisw %x4
+dc_cisw %x5
+dc_cisw %x6
+dc_cisw %x7
+dc_cisw %x8
+dc_cisw %x9
+dc_cisw %x10
+dc_cisw %x11
+dc_cisw %x12
+dc_cisw %x13
+dc_cisw %x14
+dc_cisw %x15
+dc_cisw %x16
+dc_cisw %x17
+dc_cisw %x18
+dc_cisw %x19
+dc_cisw %x20
+dc_cisw %x21
+dc_cisw %x22
+dc_cisw %x23
+dc_cisw %x24
+dc_cisw %x25
+dc_cisw %x26
+dc_cisw %x27
+dc_cisw %x28
+dc_cisw %x29
+dc_cisw %x30
+ic_ivau (%x0)[1byte]
+ic_ivau (%x0)[1byte]
+ic_ivau (%x1)[1byte]
+ic_ivau (%x2)[1byte]
+ic_ivau (%x3)[1byte]
+ic_ivau (%x4)[1byte]
+ic_ivau (%x5)[1byte]
+ic_ivau (%x6)[1byte]
+ic_ivau (%x7)[1byte]
+ic_ivau (%x8)[1byte]
+ic_ivau (%x9)[1byte]
+ic_ivau (%x10)[1byte]
+ic_ivau (%x11)[1byte]
+ic_ivau (%x12)[1byte]
+ic_ivau (%x13)[1byte]
+ic_ivau (%x14)[1byte]
+ic_ivau (%x15)[1byte]
+ic_ivau (%x16)[1byte]
+ic_ivau (%x17)[1byte]
+ic_ivau (%x18)[1byte]
+ic_ivau (%x19)[1byte]
+ic_ivau (%x20)[1byte]
+ic_ivau (%x21)[1byte]
+ic_ivau (%x22)[1byte]
+ic_ivau (%x23)[1byte]
+ic_ivau (%x24)[1byte]
+ic_ivau (%x25)[1byte]
+ic_ivau (%x26)[1byte]
+ic_ivau (%x27)[1byte]
+ic_ivau (%x28)[1byte]
+ic_ivau (%x29)[1byte]
+ic_ivau (%x30)[1byte]
+ic_iallu
+ic_ialluis
+test_sys_cache complete
 ldxr   (%x1)[8byte] -> %x0
 ldxrb  (%x1)[1byte] -> %w0
 ldxrh  (%x1)[2byte] -> %w0
@@ -857,7 +1089,8 @@ stlxr  %x0 -> (%x1)[8byte] %w2
 stlxrb %w0 -> (%x1)[1byte] %w2
 stlxrh %w0 -> (%x1)[2byte] %w2
 stlxp  %w0 %w1 -> (%x2)[8byte] %w3
-clrex  $0x0000000000000000
+clrex  $0x000000000000000f
+clrex  $0x0000000000000002
 test_exclusive_memops complete
 ldp    (%x2)[8byte] -> %w0 %w1
 stp    %w0 %w1 -> (%x2)[8byte]
@@ -977,31 +1210,31 @@ fcvtzu %d13 $0x40 -> %d12
 fcvtzu %d29 $0x15 -> %d28
 fcvtzu %d31 $0x2a -> %d30
 test_fcvtzu_scalar_fixed complete
-fcvtzu %q1 $0x02 $0x01 -> %q0
+fcvtzu %q1 $0x01 $0x02 -> %q0
 fcvtzu %q3 $0x02 $0x02 -> %q2
-fcvtzu %q5 $0x02 $0x04 -> %q4
-fcvtzu %q7 $0x02 $0x08 -> %q6
-fcvtzu %q9 $0x02 $0x10 -> %q8
-fcvtzu %q11 $0x02 $0x20 -> %q10
-fcvtzu %q29 $0x02 $0x15 -> %q28
-fcvtzu %q31 $0x02 $0x1f -> %q30
-fcvtzu %q1 $0x03 $0x01 -> %q0
-fcvtzu %q3 $0x03 $0x02 -> %q2
-fcvtzu %q5 $0x03 $0x04 -> %q4
-fcvtzu %q7 $0x03 $0x08 -> %q6
-fcvtzu %q9 $0x03 $0x10 -> %q8
-fcvtzu %q11 $0x03 $0x20 -> %q10
-fcvtzu %q13 $0x03 $0x40 -> %q12
-fcvtzu %q29 $0x03 $0x15 -> %q28
-fcvtzu %q31 $0x03 $0x2a -> %q30
-fcvtzu %d1 $0x02 $0x01 -> %d0
+fcvtzu %q5 $0x04 $0x02 -> %q4
+fcvtzu %q7 $0x08 $0x02 -> %q6
+fcvtzu %q9 $0x10 $0x02 -> %q8
+fcvtzu %q11 $0x20 $0x02 -> %q10
+fcvtzu %q29 $0x15 $0x02 -> %q28
+fcvtzu %q31 $0x1f $0x02 -> %q30
+fcvtzu %q1 $0x01 $0x03 -> %q0
+fcvtzu %q3 $0x02 $0x03 -> %q2
+fcvtzu %q5 $0x04 $0x03 -> %q4
+fcvtzu %q7 $0x08 $0x03 -> %q6
+fcvtzu %q9 $0x10 $0x03 -> %q8
+fcvtzu %q11 $0x20 $0x03 -> %q10
+fcvtzu %q13 $0x40 $0x03 -> %q12
+fcvtzu %q29 $0x15 $0x03 -> %q28
+fcvtzu %q31 $0x2a $0x03 -> %q30
+fcvtzu %d1 $0x01 $0x02 -> %d0
 fcvtzu %d3 $0x02 $0x02 -> %d2
-fcvtzu %d5 $0x02 $0x04 -> %d4
-fcvtzu %d7 $0x02 $0x08 -> %d6
-fcvtzu %d9 $0x02 $0x10 -> %d8
-fcvtzu %d11 $0x02 $0x20 -> %d10
-fcvtzu %d29 $0x02 $0x15 -> %d28
-fcvtzu %d31 $0x02 $0x1f -> %d30
+fcvtzu %d5 $0x04 $0x02 -> %d4
+fcvtzu %d7 $0x08 $0x02 -> %d6
+fcvtzu %d9 $0x10 $0x02 -> %d8
+fcvtzu %d11 $0x20 $0x02 -> %d10
+fcvtzu %d29 $0x15 $0x02 -> %d28
+fcvtzu %d31 $0x1f $0x02 -> %d30
 test_fcvtzu_vector_fixed complete
 sli    %q15 $0x00 $0x00 -> %q16
 sli    %q1 $0x00 $0x01 -> %q2
@@ -1215,31 +1448,25 @@ ucvtf  %d21 $0x40 -> %d29
 ucvtf  %d29 $0x15 -> %d30
 ucvtf  %d13 $0x2a -> %d17
 test_ucvtf_scalar_fixed complete
-ucvtf  %q1 $0x02 $0x01 -> %q0
-ucvtf  %q3 $0x02 $0x02 -> %q2
-ucvtf  %q5 $0x02 $0x04 -> %q4
-ucvtf  %q7 $0x02 $0x08 -> %q6
-ucvtf  %q9 $0x02 $0x10 -> %q8
-ucvtf  %q11 $0x02 $0x20 -> %q10
-ucvtf  %q29 $0x02 $0x15 -> %q28
-ucvtf  %q31 $0x02 $0x1f -> %q30
-ucvtf  %q1 $0x03 $0x01 -> %q0
-ucvtf  %q3 $0x03 $0x02 -> %q2
-ucvtf  %q5 $0x03 $0x04 -> %q4
-ucvtf  %q7 $0x03 $0x08 -> %q6
-ucvtf  %q9 $0x03 $0x10 -> %q8
-ucvtf  %q11 $0x03 $0x20 -> %q10
-ucvtf  %q13 $0x03 $0x40 -> %q12
-ucvtf  %q29 $0x03 $0x15 -> %q28
-ucvtf  %q31 $0x03 $0x2a -> %q30
-ucvtf  %d1 $0x02 $0x01 -> %d0
-ucvtf  %d3 $0x02 $0x02 -> %d2
-ucvtf  %d5 $0x02 $0x04 -> %d4
-ucvtf  %d7 $0x02 $0x08 -> %d6
-ucvtf  %d9 $0x02 $0x10 -> %d8
-ucvtf  %d11 $0x02 $0x20 -> %d10
-ucvtf  %d29 $0x02 $0x15 -> %d28
-ucvtf  %d31 $0x02 $0x1f -> %d30
+ucvtf  %q1 $0x01 $0x02 -> %q1
+ucvtf  %q2 $0x02 $0x02 -> %q2
+ucvtf  %q4 $0x04 $0x02 -> %q4
+ucvtf  %q8 $0x08 $0x02 -> %q8
+ucvtf  %q16 $0x10 $0x02 -> %q16
+ucvtf  %q2 $0x20 $0x02 -> %q2
+ucvtf  %q1 $0x01 $0x03 -> %q1
+ucvtf  %q2 $0x02 $0x03 -> %q2
+ucvtf  %q4 $0x04 $0x03 -> %q4
+ucvtf  %q8 $0x08 $0x03 -> %q8
+ucvtf  %q16 $0x10 $0x03 -> %q16
+ucvtf  %q2 $0x20 $0x03 -> %q2
+ucvtf  %q4 $0x40 $0x03 -> %q4
+ucvtf  %d1 $0x01 $0x02 -> %d1
+ucvtf  %d2 $0x02 $0x02 -> %d2
+ucvtf  %d4 $0x04 $0x02 -> %d4
+ucvtf  %d8 $0x08 $0x02 -> %d8
+ucvtf  %d16 $0x10 $0x02 -> %d16
+ucvtf  %d2 $0x20 $0x02 -> %d2
 test_ucvtf_vector_fixed complete
 scvtf  %w9 -> %s4
 scvtf  %w28 -> %d11
@@ -1275,31 +1502,18 @@ scvtf  %d21 $0x40 -> %d29
 scvtf  %d29 $0x15 -> %d30
 scvtf  %d13 $0x2a -> %d17
 test_scvtf_scalar_fixed complete
-scvtf  %q1 $0x02 $0x01 -> %q0
-scvtf  %q3 $0x02 $0x02 -> %q2
-scvtf  %q5 $0x02 $0x04 -> %q4
-scvtf  %q7 $0x02 $0x08 -> %q6
-scvtf  %q9 $0x02 $0x10 -> %q8
-scvtf  %q11 $0x02 $0x20 -> %q10
-scvtf  %q29 $0x02 $0x15 -> %q28
-scvtf  %q31 $0x02 $0x1f -> %q30
-scvtf  %q1 $0x03 $0x01 -> %q0
-scvtf  %q3 $0x03 $0x02 -> %q2
-scvtf  %q5 $0x03 $0x04 -> %q4
-scvtf  %q7 $0x03 $0x08 -> %q6
-scvtf  %q9 $0x03 $0x10 -> %q8
-scvtf  %q11 $0x03 $0x20 -> %q10
-scvtf  %q13 $0x03 $0x40 -> %q12
-scvtf  %q29 $0x03 $0x15 -> %q28
-scvtf  %q31 $0x03 $0x2a -> %q30
-scvtf  %d1 $0x02 $0x01 -> %d0
-scvtf  %d3 $0x02 $0x02 -> %d2
-scvtf  %d5 $0x02 $0x04 -> %d4
-scvtf  %d7 $0x02 $0x08 -> %d6
-scvtf  %d9 $0x02 $0x10 -> %d8
-scvtf  %d11 $0x02 $0x20 -> %d10
-scvtf  %d29 $0x02 $0x15 -> %d28
-scvtf  %d31 $0x02 $0x1f -> %d30
+scvtf  %q1 $0x01 $0x02 -> %q1
+scvtf  %q2 $0x02 $0x02 -> %q2
+scvtf  %q4 $0x04 $0x02 -> %q4
+scvtf  %q8 $0x08 $0x02 -> %q8
+scvtf  %q16 $0x10 $0x02 -> %q16
+scvtf  %q2 $0x20 $0x02 -> %q2
+scvtf  %d1 $0x01 $0x02 -> %d1
+scvtf  %d2 $0x02 $0x02 -> %d2
+scvtf  %d4 $0x04 $0x02 -> %d4
+scvtf  %d8 $0x08 $0x02 -> %d8
+scvtf  %d16 $0x10 $0x02 -> %d16
+scvtf  %d2 $0x20 $0x02 -> %d2
 test_scvtf_vector_fixed complete
 ccmp.ge %w28 $0x0a $0x0a
 ccmp.eq %w0 $0x00 $0x00
@@ -1669,55 +1883,55 @@ ldr    +0x0aa8(%x30)[8byte] -> %x30
 ldr    +0x0554(%x30)[4byte] -> %w30
 ldr    +0x0550(%x30)[8byte] -> %x30
 ldr base immediate offset complete
-ldr    (%x1,%x2,uxtw)[4byte] -> %w0
-ldr    (%x1,%x2,uxtw)[8byte] -> %x0
-ldr    (%x17,%x18,uxtw)[4byte] -> %w16
-ldr    (%x17,%x18,uxtw)[8byte] -> %x16
-ldr    (%x29,%x30,uxtw)[4byte] -> %w30
-ldr    (%x29,%x30,uxtw)[8byte] -> %x30
-ldr    (%x1,%x2)[4byte] -> %w0
-ldr    (%x1,%x2)[8byte] -> %x0
+ldr    (%x1,%w2,uxtw)[4byte] -> %w0
+ldr    (%x1,%w2,uxtw)[8byte] -> %x0
+ldr    (%x17,%w2,uxtw)[4byte] -> %w16
+ldr    (%x17,%w2,uxtw)[8byte] -> %x16
+ldr    (%x29,%w2,uxtw)[4byte] -> %w30
+ldr    (%x29,%w2,uxtw)[8byte] -> %x30
+ldr    (%x1,%x18)[4byte] -> %w0
+ldr    (%x1,%x18)[8byte] -> %x0
 ldr    (%x17,%x18)[4byte] -> %w16
 ldr    (%x17,%x18)[8byte] -> %x16
-ldr    (%x29,%x30)[4byte] -> %w30
-ldr    (%x29,%x30)[8byte] -> %x30
-ldr    (%x1,%x2,sxtw)[4byte] -> %w0
-ldr    (%x1,%x2,sxtw)[8byte] -> %x0
-ldr    (%x17,%x18,sxtw)[4byte] -> %w16
-ldr    (%x17,%x18,sxtw)[8byte] -> %x16
-ldr    (%x29,%x30,sxtw)[4byte] -> %w30
-ldr    (%x29,%x30,sxtw)[8byte] -> %x30
-ldr    (%x1,%x2,sxtx)[4byte] -> %w0
-ldr    (%x1,%x2,sxtx)[8byte] -> %x0
-ldr    (%x17,%x18,sxtx)[4byte] -> %w16
-ldr    (%x17,%x18,sxtx)[8byte] -> %x16
-ldr    (%x29,%x30,sxtx)[4byte] -> %w30
-ldr    (%x29,%x30,sxtx)[8byte] -> %x30
+ldr    (%x29,%x18)[4byte] -> %w30
+ldr    (%x29,%x18)[8byte] -> %x30
+ldr    (%x1,%w28,sxtw)[4byte] -> %w0
+ldr    (%x1,%w28,sxtw)[8byte] -> %x0
+ldr    (%x17,%w28,sxtw)[4byte] -> %w16
+ldr    (%x17,%w28,sxtw)[8byte] -> %x16
+ldr    (%x29,%w28,sxtw)[4byte] -> %w30
+ldr    (%x29,%w28,sxtw)[8byte] -> %x30
+ldr    (%x1,%x27,sxtx)[4byte] -> %w0
+ldr    (%x1,%x27,sxtx)[8byte] -> %x0
+ldr    (%x17,%x27,sxtx)[4byte] -> %w16
+ldr    (%x17,%x27,sxtx)[8byte] -> %x16
+ldr    (%x29,%x27,sxtx)[4byte] -> %w30
+ldr    (%x29,%x27,sxtx)[8byte] -> %x30
 ldr base register complete
-ldr    (%x1,%x2,uxtw #2)[4byte] -> %w0
-ldr    (%x1,%x2,uxtw #3)[8byte] -> %x0
-ldr    (%x17,%x18,uxtw #2)[4byte] -> %w16
-ldr    (%x17,%x18,uxtw #3)[8byte] -> %x16
-ldr    (%x29,%x30,uxtw #2)[4byte] -> %w30
-ldr    (%x29,%x30,uxtw #3)[8byte] -> %x30
-ldr    (%x1,%x2,uxtx #2)[4byte] -> %w0
-ldr    (%x1,%x2,uxtx #3)[8byte] -> %x0
-ldr    (%x17,%x18,uxtx #2)[4byte] -> %w16
-ldr    (%x17,%x18,uxtx #3)[8byte] -> %x16
-ldr    (%x29,%x30,uxtx #2)[4byte] -> %w30
-ldr    (%x29,%x30,uxtx #3)[8byte] -> %x30
-ldr    (%x1,%x2,sxtw #2)[4byte] -> %w0
-ldr    (%x1,%x2,sxtw #3)[8byte] -> %x0
-ldr    (%x17,%x18,sxtw #2)[4byte] -> %w16
-ldr    (%x17,%x18,sxtw #3)[8byte] -> %x16
-ldr    (%x29,%x30,sxtw #2)[4byte] -> %w30
-ldr    (%x29,%x30,sxtw #3)[8byte] -> %x30
-ldr    (%x1,%x2,sxtx #2)[4byte] -> %w0
-ldr    (%x1,%x2,sxtx #3)[8byte] -> %x0
-ldr    (%x17,%x18,sxtx #2)[4byte] -> %w16
-ldr    (%x17,%x18,sxtx #3)[8byte] -> %x16
-ldr    (%x29,%x30,sxtx #2)[4byte] -> %w30
-ldr    (%x29,%x30,sxtx #3)[8byte] -> %x30
+ldr    (%x1,%w2,uxtw #2)[4byte] -> %w0
+ldr    (%x1,%w2,uxtw #3)[8byte] -> %x0
+ldr    (%x17,%w2,uxtw #2)[4byte] -> %w16
+ldr    (%x17,%w2,uxtw #3)[8byte] -> %x16
+ldr    (%x29,%w2,uxtw #2)[4byte] -> %w30
+ldr    (%x29,%w2,uxtw #3)[8byte] -> %x30
+ldr    (%x1,%x18,lsl #2)[4byte] -> %w0
+ldr    (%x1,%x18,lsl #3)[8byte] -> %x0
+ldr    (%x17,%x18,lsl #2)[4byte] -> %w16
+ldr    (%x17,%x18,lsl #3)[8byte] -> %x16
+ldr    (%x29,%x18,lsl #2)[4byte] -> %w30
+ldr    (%x29,%x18,lsl #3)[8byte] -> %x30
+ldr    (%x1,%w28,sxtw #2)[4byte] -> %w0
+ldr    (%x1,%w28,sxtw #3)[8byte] -> %x0
+ldr    (%x17,%w28,sxtw #2)[4byte] -> %w16
+ldr    (%x17,%w28,sxtw #3)[8byte] -> %x16
+ldr    (%x29,%w28,sxtw #2)[4byte] -> %w30
+ldr    (%x29,%w28,sxtw #3)[8byte] -> %x30
+ldr    (%x1,%x27,sxtx #2)[4byte] -> %w0
+ldr    (%x1,%x27,sxtx #3)[8byte] -> %x0
+ldr    (%x17,%x27,sxtx #2)[4byte] -> %w16
+ldr    (%x17,%x27,sxtx #3)[8byte] -> %x16
+ldr    (%x29,%x27,sxtx #2)[4byte] -> %w30
+ldr    (%x29,%x27,sxtx #3)[8byte] -> %x30
 ldr base register extend complete
 ldr complete
 str    %w0 %x0 $0x0000000000000000 -> (%x0)[4byte] %x0
@@ -1843,55 +2057,55 @@ str    %x30 -> +0x1ff8(%x30)[8byte]
 str    %w30 -> +0x0aac(%x30)[4byte]
 str    %x30 -> +0x0aa8(%x30)[8byte]
 str base immediate unsigned offset complete
-str    %w0 -> (%x0,%x1,uxtw)[4byte]
-str    %x0 -> (%x0,%x1,uxtw)[8byte]
-str    %w0 -> (%x0,%x1)[4byte]
-str    %x0 -> (%x0,%x1)[8byte]
-str    %w0 -> (%x0,%x1,sxtw)[4byte]
-str    %x0 -> (%x0,%x1,sxtw)[8byte]
-str    %w0 -> (%x0,%x1,sxtx)[4byte]
-str    %x0 -> (%x0,%x1,sxtx)[8byte]
-str    %w16 -> (%x15,%x16,uxtw)[4byte]
-str    %x16 -> (%x15,%x16,uxtw)[8byte]
+str    %w0 -> (%x0,%w1,uxtw)[4byte]
+str    %x0 -> (%x0,%w1,uxtw)[8byte]
+str    %w0 -> (%x0,%x16)[4byte]
+str    %x0 -> (%x0,%x16)[8byte]
+str    %w0 -> (%x0,%w30,sxtw)[4byte]
+str    %x0 -> (%x0,%w30,sxtw)[8byte]
+str    %w0 -> (%x0,%x28,sxtx)[4byte]
+str    %x0 -> (%x0,%x28,sxtx)[8byte]
+str    %w16 -> (%x15,%w1,uxtw)[4byte]
+str    %x16 -> (%x15,%w1,uxtw)[8byte]
 str    %w16 -> (%x15,%x16)[4byte]
 str    %x16 -> (%x15,%x16)[8byte]
-str    %w16 -> (%x15,%x16,sxtw)[4byte]
-str    %x16 -> (%x15,%x16,sxtw)[8byte]
-str    %w16 -> (%x15,%x16,sxtx)[4byte]
-str    %x16 -> (%x15,%x16,sxtx)[8byte]
-str    %w30 -> (%x29,%x30,uxtw)[4byte]
-str    %x30 -> (%x29,%x30,uxtw)[8byte]
-str    %w30 -> (%x29,%x30)[4byte]
-str    %x30 -> (%x29,%x30)[8byte]
-str    %w30 -> (%x29,%x30,sxtw)[4byte]
-str    %x30 -> (%x29,%x30,sxtw)[8byte]
-str    %w30 -> (%x29,%x30,sxtx)[4byte]
-str    %x30 -> (%x29,%x30,sxtx)[8byte]
+str    %w16 -> (%x15,%w30,sxtw)[4byte]
+str    %x16 -> (%x15,%w30,sxtw)[8byte]
+str    %w16 -> (%x15,%x28,sxtx)[4byte]
+str    %x16 -> (%x15,%x28,sxtx)[8byte]
+str    %w30 -> (%x29,%w1,uxtw)[4byte]
+str    %x30 -> (%x29,%w1,uxtw)[8byte]
+str    %w30 -> (%x29,%x16)[4byte]
+str    %x30 -> (%x29,%x16)[8byte]
+str    %w30 -> (%x29,%w30,sxtw)[4byte]
+str    %x30 -> (%x29,%w30,sxtw)[8byte]
+str    %w30 -> (%x29,%x28,sxtx)[4byte]
+str    %x30 -> (%x29,%x28,sxtx)[8byte]
 str base register complete
-str    %w0 -> (%x0,%x1,uxtw #2)[4byte]
-str    %x0 -> (%x0,%x1,uxtw #3)[8byte]
-str    %w0 -> (%x0,%x1,uxtx #2)[4byte]
-str    %x0 -> (%x0,%x1,uxtx #3)[8byte]
-str    %w0 -> (%x0,%x1,sxtw #2)[4byte]
-str    %x0 -> (%x0,%x1,sxtw #3)[8byte]
-str    %w0 -> (%x0,%x1,sxtx #2)[4byte]
-str    %x0 -> (%x0,%x1,sxtx #3)[8byte]
-str    %w16 -> (%x15,%x16,uxtw #2)[4byte]
-str    %x16 -> (%x15,%x16,uxtw #3)[8byte]
-str    %w16 -> (%x15,%x16,uxtx #2)[4byte]
-str    %x16 -> (%x15,%x16,uxtx #3)[8byte]
-str    %w16 -> (%x15,%x16,sxtw #2)[4byte]
-str    %x16 -> (%x15,%x16,sxtw #3)[8byte]
-str    %w16 -> (%x15,%x16,sxtx #2)[4byte]
-str    %x16 -> (%x15,%x16,sxtx #3)[8byte]
-str    %w30 -> (%x29,%x30,uxtw #2)[4byte]
-str    %x30 -> (%x29,%x30,uxtw #3)[8byte]
-str    %w30 -> (%x29,%x30,uxtx #2)[4byte]
-str    %x30 -> (%x29,%x30,uxtx #3)[8byte]
-str    %w30 -> (%x29,%x30,sxtw #2)[4byte]
-str    %x30 -> (%x29,%x30,sxtw #3)[8byte]
-str    %w30 -> (%x29,%x30,sxtx #2)[4byte]
-str    %x30 -> (%x29,%x30,sxtx #3)[8byte]
+str    %w0 -> (%x0,%w1,uxtw #2)[4byte]
+str    %x0 -> (%x0,%w1,uxtw #3)[8byte]
+str    %w0 -> (%x0,%x16,lsl #2)[4byte]
+str    %x0 -> (%x0,%x16,lsl #3)[8byte]
+str    %w0 -> (%x0,%w30,sxtw #2)[4byte]
+str    %x0 -> (%x0,%w30,sxtw #3)[8byte]
+str    %w0 -> (%x0,%x28,sxtx #2)[4byte]
+str    %x0 -> (%x0,%x28,sxtx #3)[8byte]
+str    %w16 -> (%x15,%w1,uxtw #2)[4byte]
+str    %x16 -> (%x15,%w1,uxtw #3)[8byte]
+str    %w16 -> (%x15,%x16,lsl #2)[4byte]
+str    %x16 -> (%x15,%x16,lsl #3)[8byte]
+str    %w16 -> (%x15,%w30,sxtw #2)[4byte]
+str    %x16 -> (%x15,%w30,sxtw #3)[8byte]
+str    %w16 -> (%x15,%x28,sxtx #2)[4byte]
+str    %x16 -> (%x15,%x28,sxtx #3)[8byte]
+str    %w30 -> (%x29,%w1,uxtw #2)[4byte]
+str    %x30 -> (%x29,%w1,uxtw #3)[8byte]
+str    %w30 -> (%x29,%x16,lsl #2)[4byte]
+str    %x30 -> (%x29,%x16,lsl #3)[8byte]
+str    %w30 -> (%x29,%w30,sxtw #2)[4byte]
+str    %x30 -> (%x29,%w30,sxtw #3)[8byte]
+str    %w30 -> (%x29,%x28,sxtx #2)[4byte]
+str    %x30 -> (%x29,%x28,sxtx #3)[8byte]
 str base register extend complete
 str complete
 ldpsw  (%x0)[8byte] %x0 $0x0000000000000000 -> %x1 %x2 %x0
@@ -1934,216 +2148,216 @@ ldpsw  +0xfc(%x28)[8byte] -> %x29 %x30
 ldpsw  -0x0100(%x28)[8byte] -> %x29 %x30
 ldpsw base signed offset complete
 ldpsw complete
-ld2    (%x2)[16byte] $0x00 -> %q0 %q1
-ld2    (%x16)[16byte] $0x00 -> %q14 %q15
-ld2    (%x30)[16byte] $0x00 -> %q28 %q29
+ld2    (%x2)[32byte] $0x00 -> %q0 %q1
+ld2    (%x16)[32byte] $0x00 -> %q14 %q15
+ld2    (%x30)[32byte] $0x00 -> %q28 %q29
 ld2 simdfp multiple structures no offset complete
-ld2    (%x0)[32byte] $0x00 %x0 %x0 -> %q0 %q1 %x0
-ld2    (%x15)[32byte] $0x00 %x15 %x15 -> %q15 %q16 %x15
-ld2    (%x30)[32byte] $0x00 %x30 %x30 -> %q29 %q30 %x30
-ld2    (%x0)[16byte] $0x00 %x0 $0x10 -> %d0 %d1 %x0
-ld2    (%x0)[32byte] $0x00 %x0 $0x20 -> %q0 %q1 %x0
+ld2    (%x0)[32byte] %x0 %x0 $0x00 -> %q0 %q1 %x0
+ld2    (%x15)[32byte] %x15 %x15 $0x00 -> %q15 %q16 %x15
+ld2    (%x30)[32byte] %x30 %x30 $0x00 -> %q29 %q30 %x30
+ld2    (%x0)[32byte] %x0 $0x0000000000000020 $0x03 -> %q0 %q1 %x0
+ld2    (%x0)[16byte] %x0 $0x0000000000000010 $0x02 -> %d2 %d3 %x0
 ld2 simdfp multiple structures post-index complete
-ld2    (%x0)[2byte] $0x00 -> %q0 %q1
-ld2    (%x0)[2byte] $0x01 -> %q0 %q1
-ld2    (%x0)[2byte] $0x02 -> %q0 %q1
-ld2    (%x0)[2byte] $0x03 -> %q0 %q1
-ld2    (%x0)[2byte] $0x04 -> %q0 %q1
-ld2    (%x0)[2byte] $0x05 -> %q0 %q1
-ld2    (%x0)[2byte] $0x06 -> %q0 %q1
-ld2    (%x0)[2byte] $0x07 -> %q0 %q1
-ld2    (%x0)[2byte] $0x08 -> %q0 %q1
-ld2    (%x0)[2byte] $0x09 -> %q0 %q1
-ld2    (%x0)[2byte] $0x0a -> %q0 %q1
-ld2    (%x0)[2byte] $0x0b -> %q0 %q1
-ld2    (%x0)[2byte] $0x0c -> %q0 %q1
-ld2    (%x0)[2byte] $0x0d -> %q0 %q1
-ld2    (%x0)[2byte] $0x0e -> %q0 %q1
-ld2    (%x0)[2byte] $0x0f -> %q0 %q1
-ld2    (%x0)[2byte] $0x01 -> %q0 %q1
-ld2    (%x15)[2byte] $0x01 -> %q15 %q16
-ld2    (%x30)[2byte] $0x01 -> %q29 %q30
+ld2    (%x0)[2byte] $0x00 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x01 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x02 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x03 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x04 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x05 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x06 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x07 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x08 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x09 $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x0a $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x0b $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x0c $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x0d $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x0e $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x0f $0x00 -> %q0 %q1
+ld2    (%x0)[2byte] $0x01 $0x00 -> %q0 %q1
+ld2    (%x15)[2byte] $0x01 $0x00 -> %q15 %q16
+ld2    (%x30)[2byte] $0x01 $0x00 -> %q29 %q30
 ld2 simdfp single structure no offset complete
-ld2    %q0 %q1 (%x0)[2byte] $0x01 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x02 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x03 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x04 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x05 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x06 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x07 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x08 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x09 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x0a %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x0b %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x0c %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x0d %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x0e %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x0f %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x01 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q15 %q16 (%x15)[2byte] $0x01 %x15 $0x02 -> %q15 %q16 %x15
-ld2    %q29 %q30 (%x30)[2byte] $0x01 %x30 $0x02 -> %q29 %q30 %x30
-ld2    %q0 %q1 (%x0)[2byte] $0x01 %x0 $0x02 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[4byte] $0x01 %x0 $0x04 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[8byte] $0x01 %x0 $0x08 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[16byte] $0x01 %x0 $0x10 -> %q0 %q1 %x0
-ld2    %q0 %q1 (%x0)[2byte] $0x01 %x0 %x1 -> %q0 %q1 %x0
-ld2    %q15 %q16 (%x15)[2byte] $0x01 %x15 %x16 -> %q15 %q16 %x15
-ld2    %q29 %q30 (%x30)[2byte] $0x01 %x30 %x29 -> %q29 %q30 %x30
+ld2    (%x0)[2byte] $0x01 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x02 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x03 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x04 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x05 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x06 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x07 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x08 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x09 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x0a %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x0b %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x0c %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x0d %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x0e %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x0f %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[2byte] $0x01 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x15)[2byte] $0x01 %x15 $0x0000000000000002 $0x00 -> %q15 %q16 %x15
+ld2    (%x30)[2byte] $0x01 %x30 $0x0000000000000002 $0x00 -> %q29 %q30 %x30
+ld2    (%x0)[2byte] $0x01 %x0 $0x0000000000000002 $0x00 -> %q0 %q1 %x0
+ld2    (%x0)[4byte] $0x01 %x0 $0x0000000000000004 $0x01 -> %q0 %q1 %x0
+ld2    (%x0)[8byte] $0x01 %x0 $0x0000000000000008 $0x02 -> %q0 %q1 %x0
+ld2    (%x0)[16byte] $0x01 %x0 $0x0000000000000010 $0x03 -> %q0 %q1 %x0
+ld2    (%x0)[16byte] $0x01 %x0 %x1 $0x03 -> %q0 %q1 %x0
+ld2    (%x15)[16byte] $0x01 %x15 %x16 $0x03 -> %q15 %q16 %x15
+ld2    (%x30)[16byte] $0x01 %x30 %x29 $0x03 -> %q29 %q30 %x30
 ld2 simdfp single structure post-index complete
 ld2 complete
-ld3    (%x2)[24byte] $0x00 -> %q0 %q1 %q2
-ld3    (%x16)[24byte] $0x00 -> %q14 %q15 %q16
-ld3    (%x30)[24byte] $0x00 -> %q28 %q29 %q30
+ld3    (%x2)[48byte] $0x00 -> %q0 %q1 %q2
+ld3    (%x16)[48byte] $0x00 -> %q14 %q15 %q16
+ld3    (%x30)[48byte] $0x00 -> %q28 %q29 %q30
 ld3 simdfp multiple structures no offset complete
-ld3    (%x0)[48byte] $0x00 %x0 %x0 -> %q0 %q1 %q2 %x0
-ld3    (%x15)[48byte] $0x00 %x15 %x15 -> %q15 %q16 %q17 %x15
-ld3    (%x30)[48byte] $0x00 %x30 %x30 -> %q28 %q29 %q30 %x30
-ld3    (%x0)[24byte] $0x00 %x0 $0x18 -> %d0 %d1 %d2 %x0
-ld3    (%x0)[48byte] $0x00 %x0 $0x30 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[48byte] %x0 %x0 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x15)[48byte] %x15 %x15 $0x00 -> %q15 %q16 %q17 %x15
+ld3    (%x30)[48byte] %x30 %x30 $0x00 -> %q28 %q29 %q30 %x30
+ld3    (%x0)[24byte] %x0 $0x18 $0x00 -> %d0 %d1 %d2 %x0
+ld3    (%x0)[48byte] %x0 $0x30 $0x00 -> %q0 %q1 %q2 %x0
 ld3 simdfp multiple structures post-index complete
-ld3    (%x0)[3byte] $0x00 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x01 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x02 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x03 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x04 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x05 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x06 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x07 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x08 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x09 -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x0a -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x0b -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x0c -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x0d -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x0e -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x0f -> %q0 %q1 %q2
-ld3    (%x0)[3byte] $0x01 -> %q0 %q1 %q2
-ld3    (%x15)[3byte] $0x01 -> %q15 %q16 %q17
-ld3    (%x30)[3byte] $0x01 -> %q28 %q29 %q30
+ld3    (%x0)[3byte] $0x00 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x01 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x02 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x03 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x04 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x05 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x06 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x07 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x08 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x09 $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x0a $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x0b $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x0c $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x0d $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x0e $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[3byte] $0x0f $0x00 -> %q0 %q1 %q2
+ld3    (%x0)[12byte] $0x01 $0x02 -> %q0 %q1 %q2
+ld3    (%x15)[12byte] $0x01 $0x02 -> %q15 %q16 %q17
+ld3    (%x30)[12byte] $0x01 $0x02 -> %q28 %q29 %q30
 ld3 simdfp single structure no offset complete
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x00 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x01 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x02 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x03 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x04 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x05 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x06 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x07 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x08 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x09 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x0a %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x0b %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x0c %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x0d %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x0e %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x0f %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x01 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q15 %q16 %q17 (%x15)[3byte] $0x01 %x15 $0x03 -> %q15 %q16 %q17 %x15
-ld3    %q28 %q29 %q30 (%x30)[3byte] $0x01 %x30 $0x03 -> %q28 %q29 %q30 %x30
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x01 %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[6byte] $0x01 %x0 $0x06 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[12byte] $0x01 %x0 $0x0c -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[24byte] $0x01 %x0 $0x18 -> %q0 %q1 %q2 %x0
-ld3    %q0 %q1 %q2 (%x0)[3byte] $0x01 %x0 %x1 -> %q0 %q1 %q2 %x0
-ld3    %q15 %q16 %q17 (%x15)[3byte] $0x01 %x15 %x16 -> %q15 %q16 %q17 %x15
-ld3    %q28 %q29 %q30 (%x30)[3byte] $0x01 %x30 %x29 -> %q28 %q29 %q30 %x30
+ld3    (%x0)[3byte] $0x00 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x01 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x02 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x03 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x04 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x05 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x06 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x07 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x08 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x09 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x0a %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x0b %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x0c %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x0d %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x0e %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x0f %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[6byte] $0x01 %x0 $0x06 $0x01 -> %q0 %q1 %q2 %x0
+ld3    (%x15)[6byte] $0x01 %x15 $0x06 $0x01 -> %q15 %q16 %q17 %x15
+ld3    (%x30)[6byte] $0x01 %x30 $0x06 $0x01 -> %q28 %q29 %q30 %x30
+ld3    (%x0)[3byte] $0x01 %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[6byte] $0x01 %x0 $0x06 $0x01 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[12byte] $0x01 %x0 $0x0c $0x02 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[24byte] $0x01 %x0 $0x18 $0x03 -> %q0 %q1 %q2 %x0
+ld3    (%x0)[3byte] $0x01 %x0 %x1 $0x00 -> %q0 %q1 %q2 %x0
+ld3    (%x15)[3byte] $0x01 %x15 %x16 $0x00 -> %q15 %q16 %q17 %x15
+ld3    (%x30)[3byte] $0x01 %x30 %x29 $0x00 -> %q28 %q29 %q30 %x30
 ld3 simdfp single structure post-index complete
 ld3 complete
-ld4    (%x2)[64byte] $0x00 -> %q0 %q1 %q2 %q3
-ld4    (%x16)[64byte] $0x00 -> %q14 %q15 %q16 %q17
-ld4    (%x30)[64byte] $0x00 -> %q27 %q28 %q29 %q30
+ld4    (%x2)[64byte] $0x02 -> %q0 %q1 %q2 %q3
+ld4    (%x16)[64byte] $0x02 -> %q14 %q15 %q16 %q17
+ld4    (%x30)[64byte] $0x02 -> %q27 %q28 %q29 %q30
 ld4 simdfp multiple structures no offset complete
-ld4    (%x0)[64byte] $0x00 %x0 %x0 -> %q0 %q1 %q2 %q3 %x0
-ld4    (%x15)[64byte] $0x00 %x15 %x15 -> %q15 %q16 %q17 %q18 %x15
-ld4    (%x30)[64byte] $0x00 %x30 %x30 -> %q27 %q28 %q29 %q30 %x30
-ld4    (%x0)[32byte] $0x00 %x0 $0x20 -> %d0 %d1 %d2 %d3 %x0
-ld4    (%x0)[64byte] $0x00 %x0 $0x40 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[64byte] %x0 %x0 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x15)[64byte] %x15 %x15 $0x00 -> %q15 %q16 %q17 %q18 %x15
+ld4    (%x30)[64byte] %x30 %x30 $0x00 -> %q27 %q28 %q29 %q30 %x30
+ld4    (%x0)[32byte] %x0 $0x20 $0x00 -> %d0 %d1 %d2 %d3 %x0
+ld4    (%x0)[64byte] %x0 $0x40 $0x00 -> %q0 %q1 %q2 %q3 %x0
 ld4 simdfp multiple structures post-index complete
-ld4    (%x0)[4byte] $0x00 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x01 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x02 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x03 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x04 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x05 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x06 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x07 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x08 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x09 -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x0a -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x0b -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x0c -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x0d -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x0e -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x0f -> %q0 %q1 %q2 %q3
-ld4    (%x0)[4byte] $0x01 -> %q0 %q1 %q2 %q3
-ld4    (%x15)[4byte] $0x01 -> %q15 %q16 %q17 %q18
-ld4    (%x30)[4byte] $0x01 -> %q27 %q28 %q29 %q30
+ld4    (%x0)[4byte] $0x00 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x01 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x02 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x03 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x04 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x05 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x06 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x07 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x08 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x09 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x0a $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x0b $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x0c $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x0d $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x0e $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x0f $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x0)[4byte] $0x01 $0x00 -> %q0 %q1 %q2 %q3
+ld4    (%x15)[4byte] $0x01 $0x00 -> %q15 %q16 %q17 %q18
+ld4    (%x30)[4byte] $0x01 $0x00 -> %q27 %q28 %q29 %q30
 ld4 simdfp single structure no offset complete
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x00 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x01 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x02 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x03 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x04 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x05 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x06 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x07 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x08 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x09 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x0a %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x0b %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x0c %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x0d %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x0e %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x0f %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x01 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q15 %q16 %q17 %q18 (%x15)[4byte] $0x01 %x15 $0x04 -> %q15 %q16 %q17 %q18 %x15
-ld4    %q27 %q28 %q29 %q30 (%x30)[4byte] $0x01 %x30 $0x04 -> %q27 %q28 %q29 %q30 %x30
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x01 %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[8byte] $0x01 %x0 $0x08 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[16byte] $0x01 %x0 $0x10 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[32byte] $0x01 %x0 $0x20 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q0 %q1 %q2 %q3 (%x0)[4byte] $0x01 %x0 %x1 -> %q0 %q1 %q2 %q3 %x0
-ld4    %q15 %q16 %q17 %q18 (%x15)[4byte] $0x01 %x15 %x16 -> %q15 %q16 %q17 %q18 %x15
-ld4    %q27 %q28 %q29 %q30 (%x30)[4byte] $0x01 %x30 %x29 -> %q27 %q28 %q29 %q30 %x30
+ld4    (%x0)[4byte] $0x00 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x01 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x02 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x03 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x04 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x05 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x06 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x07 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x08 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x09 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x0a %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x0b %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x0c %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x0d %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x0e %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[4byte] $0x0f %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[16byte] $0x01 %x0 $0x0000000000000010 $0x02 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x15)[16byte] $0x01 %x15 $0x0000000000000010 $0x02 -> %q15 %q16 %q17 %q18 %x15
+ld4    (%x30)[16byte] $0x01 %x30 $0x0000000000000010 $0x02 -> %q27 %q28 %q29 %q30 %x30
+ld4    (%x0)[4byte] $0x01 %x0 $0x0000000000000004 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[8byte] $0x01 %x0 $0x0000000000000008 $0x01 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[16byte] $0x01 %x0 $0x0000000000000010 $0x02 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[32byte] $0x01 %x0 $0x0000000000000020 $0x03 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x0)[8byte] $0x01 %x0 %x1 $0x01 -> %q0 %q1 %q2 %q3 %x0
+ld4    (%x15)[8byte] $0x01 %x15 %x16 $0x01 -> %q15 %q16 %q17 %q18 %x15
+ld4    (%x30)[8byte] $0x01 %x30 %x29 $0x01 -> %q27 %q28 %q29 %q30 %x30
 ld4 simdfp single structure post-index complete
 ld4 complete
-ld2r   (%x0)[16byte] -> %q0 %q1
-ld2r   (%x15)[16byte] -> %q15 %q16
-ld2r   (%x16)[16byte] -> %q29 %q30
+ld2r   (%x0)[8byte] $0x02 -> %q0 %q1
+ld2r   (%x15)[8byte] $0x02 -> %q15 %q16
+ld2r   (%x16)[8byte] $0x02 -> %q29 %q30
 ld2r simdfp no offset complete
-ld2r   (%x0)[8byte] %x0 %x1 -> %q0 %q1 %x0
-ld2r   (%x15)[8byte] %x15 %x16 -> %q15 %q16 %x15
-ld2r   (%x29)[8byte] %x29 %x30 -> %q29 %q30 %x29
-ld2r   (%x0)[2byte] %x0 $0x02 -> %q0 %q1 %x0
-ld2r   (%x0)[4byte] %x0 $0x04 -> %q0 %q1 %x0
-ld2r   (%x0)[8byte] %x0 $0x08 -> %q0 %q1 %x0
-ld2r   (%x0)[16byte] %x0 $0x10 -> %q0 %q1 %x0
+ld2r   (%x0)[8byte] %x0 %x1 $0x02 -> %q0 %q1 %x0
+ld2r   (%x15)[8byte] %x15 %x16 $0x02 -> %q15 %q16 %x15
+ld2r   (%x29)[8byte] %x29 %x30 $0x02 -> %q29 %q30 %x29
+ld2r   (%x0)[2byte] %x0 $0x02 $0x00 -> %q0 %q1 %x0
+ld2r   (%x0)[4byte] %x0 $0x04 $0x01 -> %q0 %q1 %x0
+ld2r   (%x0)[8byte] %x0 $0x08 $0x02 -> %q0 %q1 %x0
+ld2r   (%x0)[16byte] %x0 $0x10 $0x03 -> %q0 %q1 %x0
 ld2r simdfp post-index complete
 ld2r complete
-ld3r   (%x0)[24byte] -> %q0 %q1 %q2
-ld3r   (%x15)[24byte] -> %q15 %q16 %q17
-ld3r   (%x30)[24byte] -> %q28 %q29 %q30
+ld3r   (%x0)[24byte] $0x03 -> %q0 %q1 %q2
+ld3r   (%x15)[24byte] $0x03 -> %q15 %q16 %q17
+ld3r   (%x30)[24byte] $0x03 -> %q28 %q29 %q30
 ld3r simdfp no offset complete
-ld3r   (%x0)[24byte] %x0 %x1 -> %q0 %q1 %q2 %x0
-ld3r   (%x15)[24byte] %x15 %x16 -> %q15 %q16 %q17 %x15
-ld3r   (%x29)[24byte] %x29 %x30 -> %q28 %q29 %q30 %x29
-ld3r   (%x0)[3byte] %x0 $0x03 -> %q0 %q1 %q2 %x0
-ld3r   (%x0)[6byte] %x0 $0x06 -> %q0 %q1 %q2 %x0
-ld3r   (%x0)[12byte] %x0 $0x0c -> %q0 %q1 %q2 %x0
-ld3r   (%x0)[24byte] %x0 $0x18 -> %q0 %q1 %q2 %x0
+ld3r   (%x0)[24byte] %x0 %x1 $0x03 -> %q0 %q1 %q2 %x0
+ld3r   (%x15)[24byte] %x15 %x16 $0x03 -> %q15 %q16 %q17 %x15
+ld3r   (%x29)[24byte] %x29 %x30 $0x03 -> %q28 %q29 %q30 %x29
+ld3r   (%x0)[3byte] %x0 $0x03 $0x00 -> %q0 %q1 %q2 %x0
+ld3r   (%x0)[6byte] %x0 $0x06 $0x01 -> %q0 %q1 %q2 %x0
+ld3r   (%x0)[12byte] %x0 $0x0c $0x02 -> %q0 %q1 %q2 %x0
+ld3r   (%x0)[24byte] %x0 $0x18 $0x03 -> %q0 %q1 %q2 %x0
 ld3r simdfp post-index complete
 ld3r complete
-ld4r   (%x0)[32byte] -> %q0 %q1 %q2 %q3
-ld4r   (%x15)[32byte] -> %q15 %q16 %q17 %q18
-ld4r   (%x30)[32byte] -> %q27 %q28 %q29 %q30
+ld4r   (%x0)[32byte] $0x03 -> %q0 %q1 %q2 %q3
+ld4r   (%x15)[32byte] $0x03 -> %q15 %q16 %q17 %q18
+ld4r   (%x30)[32byte] $0x03 -> %q27 %q28 %q29 %q30
 ld4r simdfp no offset complete
-ld4r   (%x0)[32byte] %x0 %x1 -> %q0 %q1 %q2 %q3 %x0
-ld4r   (%x15)[32byte] %x15 %x16 -> %q15 %q16 %q17 %q18 %x15
-ld4r   (%x29)[32byte] %x29 %x30 -> %q27 %q28 %q29 %q30 %x29
-ld4r   (%x0)[4byte] %x0 $0x04 -> %q0 %q1 %q2 %q3 %x0
-ld4r   (%x0)[8byte] %x0 $0x08 -> %q0 %q1 %q2 %q3 %x0
-ld4r   (%x0)[16byte] %x0 $0x10 -> %q0 %q1 %q2 %q3 %x0
-ld4r   (%x0)[32byte] %x0 $0x20 -> %q0 %q1 %q2 %q3 %x0
+ld4r   (%x0)[32byte] %x0 %x1 $0x03 -> %q0 %q1 %q2 %q3 %x0
+ld4r   (%x15)[32byte] %x15 %x16 $0x03 -> %q15 %q16 %q17 %q18 %x15
+ld4r   (%x29)[32byte] %x29 %x30 $0x03 -> %q27 %q28 %q29 %q30 %x29
+ld4r   (%x0)[4byte] %x0 $0x04 $0x00 -> %q0 %q1 %q2 %q3 %x0
+ld4r   (%x0)[8byte] %x0 $0x08 $0x01 -> %q0 %q1 %q2 %q3 %x0
+ld4r   (%x0)[16byte] %x0 $0x10 $0x02 -> %q0 %q1 %q2 %q3 %x0
+ld4r   (%x0)[32byte] %x0 $0x20 $0x03 -> %q0 %q1 %q2 %q3 %x0
 ld4r simdfp post index complete
 ld4r complete
 All tests complete

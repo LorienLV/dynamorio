@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2003-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -69,6 +69,9 @@
 #endif
 #if defined(AARCHXX) && defined(X64) && !defined(ARM_64)
 #    define ARM_64
+#endif
+#if defined(RISCV64) && defined(X64) && !defined(RISCV_64)
+#    define RISCV_64
 #endif
 
 #include "globals_api.h"
@@ -197,6 +200,12 @@
 #else
 #    define IF_MACOS64(x)
 #    define IF_MACOS64_ELSE(x, y) y
+#endif
+
+#if defined(MACOS) && defined(AARCH64)
+#    define IF_MACOSA64_ELSE(x, y) x
+#else
+#    define IF_MACOSA64_ELSE(x, y) y
 #endif
 
 #ifdef HAVE_MEMINFO_QUERY
@@ -535,6 +544,7 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 #define DYNAMORIO_VAR_LOGDIR_ID DYNAMORIO_LOGDIR
 #define DYNAMORIO_VAR_OPTIONS_ID DYNAMORIO_OPTIONS
 #define DYNAMORIO_VAR_AUTOINJECT_ID DYNAMORIO_AUTOINJECT
+#define DYNAMORIO_VAR_ALTINJECT_ID DYNAMORIO_ALTINJECT
 #define DYNAMORIO_VAR_UNSUPPORTED_ID DYNAMORIO_UNSUPPORTED
 #define DYNAMORIO_VAR_RUNUNDER_ID DYNAMORIO_RUNUNDER
 #define DYNAMORIO_VAR_CMDLINE_ID DYNAMORIO_CMDLINE
@@ -568,11 +578,11 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 #    define DYNAMORIO_VAR_HOT_PATCH_MODES_ID DYNAMORIO_HOT_PATCH_MODES
 #endif
 #ifdef PROCESS_CONTROL
-#    define DYNAMORIO_VAR_APP_PROCESS_WHITELIST_ID DYNAMORIO_APP_PROCESS_WHITELIST
-#    define DYNAMORIO_VAR_ANON_PROCESS_WHITELIST_ID DYNAMORIO_ANON_PROCESS_WHITELIST
+#    define DYNAMORIO_VAR_APP_PROCESS_ALLOWLIST_ID DYNAMORIO_APP_PROCESS_ALLOWLIST
+#    define DYNAMORIO_VAR_ANON_PROCESS_ALLOWLIST_ID DYNAMORIO_ANON_PROCESS_ALLOWLIST
 
-#    define DYNAMORIO_VAR_APP_PROCESS_BLACKLIST_ID DYNAMORIO_APP_PROCESS_BLACKLIST
-#    define DYNAMORIO_VAR_ANON_PROCESS_BLACKLIST_ID DYNAMORIO_ANON_PROCESS_BLACKLIST
+#    define DYNAMORIO_VAR_APP_PROCESS_BLOCKLIST_ID DYNAMORIO_APP_PROCESS_BLOCKLIST
+#    define DYNAMORIO_VAR_ANON_PROCESS_BLOCKLIST_ID DYNAMORIO_ANON_PROCESS_BLOCKLIST
 #endif
 
 #define DYNAMORIO_VAR_CONFIGDIR STRINGIFY(DYNAMORIO_VAR_CONFIGDIR_ID)
@@ -580,6 +590,7 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 #define DYNAMORIO_VAR_LOGDIR STRINGIFY(DYNAMORIO_VAR_LOGDIR_ID)
 #define DYNAMORIO_VAR_OPTIONS STRINGIFY(DYNAMORIO_VAR_OPTIONS_ID)
 #define DYNAMORIO_VAR_AUTOINJECT STRINGIFY(DYNAMORIO_VAR_AUTOINJECT_ID)
+#define DYNAMORIO_VAR_ALTINJECT STRINGIFY(DYNAMORIO_VAR_ALTINJECT_ID)
 #define DYNAMORIO_VAR_UNSUPPORTED STRINGIFY(DYNAMORIO_VAR_UNSUPPORTED_ID)
 #define DYNAMORIO_VAR_RUNUNDER STRINGIFY(DYNAMORIO_VAR_RUNUNDER_ID)
 #define DYNAMORIO_VAR_CMDLINE STRINGIFY(DYNAMORIO_VAR_CMDLINE_ID)
@@ -594,15 +605,15 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 #    define DYNAMORIO_VAR_HOT_PATCH_MODES STRINGIFY(DYNAMORIO_VAR_HOT_PATCH_MODES_ID)
 #endif
 #ifdef PROCESS_CONTROL
-#    define DYNAMORIO_VAR_APP_PROCESS_WHITELIST \
-        STRINGIFY(DYNAMORIO_VAR_APP_PROCESS_WHITELIST_ID)
-#    define DYNAMORIO_VAR_ANON_PROCESS_WHITELIST \
-        STRINGIFY(DYNAMORIO_VAR_ANON_PROCESS_WHITELIST_ID)
+#    define DYNAMORIO_VAR_APP_PROCESS_ALLOWLIST \
+        STRINGIFY(DYNAMORIO_VAR_APP_PROCESS_ALLOWLIST_ID)
+#    define DYNAMORIO_VAR_ANON_PROCESS_ALLOWLIST \
+        STRINGIFY(DYNAMORIO_VAR_ANON_PROCESS_ALLOWLIST_ID)
 
-#    define DYNAMORIO_VAR_APP_PROCESS_BLACKLIST \
-        STRINGIFY(DYNAMORIO_VAR_APP_PROCESS_BLACKLIST_ID)
-#    define DYNAMORIO_VAR_ANON_PROCESS_BLACKLIST \
-        STRINGIFY(DYNAMORIO_VAR_ANON_PROCESS_BLACKLIST_ID)
+#    define DYNAMORIO_VAR_APP_PROCESS_BLOCKLIST \
+        STRINGIFY(DYNAMORIO_VAR_APP_PROCESS_BLOCKLIST_ID)
+#    define DYNAMORIO_VAR_ANON_PROCESS_BLOCKLIST \
+        STRINGIFY(DYNAMORIO_VAR_ANON_PROCESS_BLOCKLIST_ID)
 #endif
 
 #ifdef UNIX
@@ -626,6 +637,7 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 #    define L_DYNAMORIO_VAR_LOGDIR L_EXPAND_LEVEL(DYNAMORIO_VAR_LOGDIR)
 #    define L_DYNAMORIO_VAR_OPTIONS L_EXPAND_LEVEL(DYNAMORIO_VAR_OPTIONS)
 #    define L_DYNAMORIO_VAR_AUTOINJECT L_EXPAND_LEVEL(DYNAMORIO_VAR_AUTOINJECT)
+#    define L_DYNAMORIO_VAR_ALTINJECT L_EXPAND_LEVEL(DYNAMORIO_VAR_ALTINJECT)
 #    define L_DYNAMORIO_VAR_UNSUPPORTED L_EXPAND_LEVEL(DYNAMORIO_VAR_UNSUPPORTED)
 #    define L_DYNAMORIO_VAR_RUNUNDER L_EXPAND_LEVEL(DYNAMORIO_VAR_RUNUNDER)
 #    define L_DYNAMORIO_VAR_CMDLINE L_EXPAND_LEVEL(DYNAMORIO_VAR_CMDLINE)
@@ -640,15 +652,15 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
             L_EXPAND_LEVEL(DYNAMORIO_VAR_HOT_PATCH_MODES)
 #    endif
 #    ifdef PROCESS_CONTROL
-#        define L_DYNAMORIO_VAR_APP_PROCESS_WHITELIST \
-            L_EXPAND_LEVEL(DYNAMORIO_VAR_APP_PROCESS_WHITELIST)
-#        define L_DYNAMORIO_VAR_ANON_PROCESS_WHITELIST \
-            L_EXPAND_LEVEL(DYNAMORIO_VAR_ANON_PROCESS_WHITELIST)
+#        define L_DYNAMORIO_VAR_APP_PROCESS_ALLOWLIST \
+            L_EXPAND_LEVEL(DYNAMORIO_VAR_APP_PROCESS_ALLOWLIST)
+#        define L_DYNAMORIO_VAR_ANON_PROCESS_ALLOWLIST \
+            L_EXPAND_LEVEL(DYNAMORIO_VAR_ANON_PROCESS_ALLOWLIST)
 
-#        define L_DYNAMORIO_VAR_APP_PROCESS_BLACKLIST \
-            L_EXPAND_LEVEL(DYNAMORIO_VAR_APP_PROCESS_BLACKLIST)
-#        define L_DYNAMORIO_VAR_ANON_PROCESS_BLACKLIST \
-            L_EXPAND_LEVEL(DYNAMORIO_VAR_ANON_PROCESS_BLACKLIST)
+#        define L_DYNAMORIO_VAR_APP_PROCESS_BLOCKLIST \
+            L_EXPAND_LEVEL(DYNAMORIO_VAR_APP_PROCESS_BLOCKLIST)
+#        define L_DYNAMORIO_VAR_ANON_PROCESS_BLOCKLIST \
+            L_EXPAND_LEVEL(DYNAMORIO_VAR_ANON_PROCESS_BLOCKLIST)
 #    endif
 
 #    define L_PRODUCT_NAME L_EXPAND_LEVEL(PRODUCT_NAME)
@@ -911,12 +923,14 @@ typedef enum {
 #define NUDGE_ARG_VERSION_1 1
 #define NUDGE_ARG_CURRENT_VERSION NUDGE_ARG_VERSION_1
 
-/* nudge_arg_t flags
- * On Linux only 2 bits for these
+/* nudge_arg_t bitfield flags.
+ * On UNIX we only have space for 2 bits for these.
  */
 enum {
-    NUDGE_IS_INTERNAL = 0x01, /* nudge is internally generated */
-#ifdef WINDOWS
+    NUDGE_IS_INTERNAL = 0x01, /* The nudge is internally generated. */
+#ifdef UNIX
+    NUDGE_IS_SUSPEND = 0x02, /* This is an internal SUSPEND_SIGNAL. */
+#else
     NUDGE_NUDGER_FREE_STACK = 0x02, /* nudger will free the nudge thread's stack so the
                                      * nudge thread itself shouldn't */
     NUDGE_FREE_ARG = 0x04,          /* nudge arg is in a separate allocation and should
@@ -940,9 +954,9 @@ typedef struct {
     uint flags : 2;
     int ignored2; /* siginfo_t.si_code: has meaning to kernel so we avoid using */
 #else
-    uint version;           /* version number for future proofing */
-    uint nudge_action_mask; /* drawn from NUDGE_DEFS above */
-    uint flags;             /* flags drawn from above enum */
+    uint version;                   /* version number for future proofing */
+    uint nudge_action_mask;         /* drawn from NUDGE_DEFS above */
+    uint flags;                     /* flags drawn from above enum */
 #endif
     client_id_t client_id; /* unique ID identifying client */
     uint64 client_arg;     /* argument for a client nudge */

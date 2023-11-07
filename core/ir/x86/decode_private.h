@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -362,7 +362,7 @@ struct _decode_info_t {
     bool evex_encoded;
     byte evex_aaa; /* aaa bits for opmask */
     /* for instr_t* target encoding */
-    ptr_int_t cur_note;
+    ptr_int_t cur_offs;
     bool has_instr_opnds;
     dr_tuple_type_t tuple_type;
     opnd_size_t input_size;
@@ -370,6 +370,9 @@ struct _decode_info_t {
 
 /* N.B.: if you change the type enum, change the string names for
  * them, kept in encode.c
+ *
+ * The TYPE_x enums are listed in 'Appendix A Opcode Map (Intel SDM Volume 2)'
+ * specifically A.2.1 Codes for Addressing Method
  */
 
 /* operand types have 2 parts, type and size */

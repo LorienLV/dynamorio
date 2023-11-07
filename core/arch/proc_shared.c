@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2013-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2013-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2008 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -41,8 +41,8 @@
 
 #include "../globals.h"
 #include "proc.h"
-#include "instr.h"        /* for dr_insert_{save,restore}_fpstate */
-#include "instrument.h"   /* for dr_insert_{save,restore}_fpstate */
+#include "instr.h"               /* for dr_insert_{save,restore}_fpstate */
+#include "instrument.h"          /* for dr_insert_{save,restore}_fpstate */
 #include "instr_create_shared.h" /* for dr_insert_{save,restore}_fpstate */
 
 #ifdef DEBUG
@@ -66,6 +66,7 @@ static ptr_uint_t mask; /* bits that should be 0 to be cache-line-aligned */
 cpu_info_t cpu_info = { VENDOR_UNKNOWN,
 #ifdef AARCHXX
                         0,
+                        0,
 #endif
                         0,
                         0,
@@ -74,11 +75,16 @@ cpu_info_t cpu_info = { VENDOR_UNKNOWN,
                         CACHE_SIZE_UNKNOWN,
                         CACHE_SIZE_UNKNOWN,
                         CACHE_SIZE_UNKNOWN,
+#if defined(RISCV64)
+                        /* FIXME i#3544: Not implemented */
+                        { 0 },
+#else
                         { 0, 0, 0, 0 },
+#endif
                         { 0x6e6b6e75, 0x006e776f } };
 
 void
-set_cache_size(uint val, uint *dst)
+proc_set_cache_size(uint val, uint *dst)
 {
     CLIENT_ASSERT(dst != NULL, "invalid internal param");
     switch (val) {
@@ -189,6 +195,12 @@ uint
 proc_get_architecture(void)
 {
     return cpu_info.architecture;
+}
+
+uint
+proc_get_vector_length_bytes(void)
+{
+    return cpu_info.sve_vector_length_bytes;
 }
 #endif
 

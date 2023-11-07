@@ -3,8 +3,8 @@ Hello world!
 ---- <application exited with code 0> ----
 Basic counts tool results:
 Total counts:
-          87 total \(fetched\) instructions
-          87 total unique \(fetched\) instructions
+          96 total \(fetched\) instructions
+          96 total unique \(fetched\) instructions
            0 total non-fetched instructions
            0 total prefetches
            6 total data loads
@@ -13,15 +13,10 @@ Total counts:
            0 total dcache flushes
            1 total threads
      .* total scheduling markers
-     .* total transfer markers
-     .* total function id markers
-     .* total function return address markers
-     .* total function argument markers
-     .* total function return value markers
-     .* total other markers
+.*
 Thread .* counts:
-          87 \(fetched\) instructions
-          87 unique \(fetched\) instructions
+          96 \(fetched\) instructions
+          96 unique \(fetched\) instructions
            0 non-fetched instructions
            0 prefetches
            6 data loads
@@ -29,9 +24,4 @@ Thread .* counts:
            0 icache flushes
            0 dcache flushes
      .* scheduling markers
-     .* transfer markers
-     .* function id markers
-     .* function return address markers
-     .* function argument markers
-     .* function return value markers
-     .* other markers
+.*

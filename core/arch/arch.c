@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -488,7 +488,8 @@ shared_gencode_emit(generated_code_t *gencode _IF_X86_64(bool x86_mode))
     machine_cache_sync(gencode->gen_start_pc, gencode->gen_end_pc, true);
 }
 
-static void shared_gencode_init(IF_X86_64_ELSE(gencode_mode_t gencode_mode, void))
+static void
+shared_gencode_init(IF_X86_64_ELSE(gencode_mode_t gencode_mode, void))
 {
     generated_code_t *gencode;
     ibl_branch_type_t branch_type;
@@ -496,6 +497,11 @@ static void shared_gencode_init(IF_X86_64_ELSE(gencode_mode_t gencode_mode, void
     bool x86_mode = false;
     bool x86_to_x64_mode = false;
 #endif
+
+    /* XXX i#5383: Audit these calls and ensure they cover all scenarios, are placed
+     * at the most efficient level, and are always properly paired.
+     */
+    PTHREAD_JIT_WRITE();
 
     gencode = heap_mmap_reserve(GENCODE_RESERVE_SIZE, GENCODE_COMMIT_SIZE,
                                 MEMPROT_EXEC | MEMPROT_READ | MEMPROT_WRITE,
@@ -605,14 +611,13 @@ arch_reset_stolen_reg(void)
 #    ifdef ARM
     dr_isa_mode_t old_mode;
 #    endif
-    dcontext_t *dcontext;
     if (DR_REG_R0 + INTERNAL_OPTION(steal_reg_at_reset) == dr_reg_stolen)
         return;
     SYSLOG_INTERNAL_INFO("swapping stolen reg from %s to %s", reg_names[dr_reg_stolen],
                          reg_names[DR_REG_R0 + INTERNAL_OPTION(steal_reg_at_reset)]);
-    dcontext = get_thread_private_dcontext();
-    ASSERT(dcontext != NULL);
 #    ifdef ARM
+    dcontext_t *dcontext = get_thread_private_dcontext();
+    ASSERT(dcontext != NULL);
     dr_set_isa_mode(dcontext, DR_ISA_ARM_THUMB, &old_mode);
 #    endif
 
@@ -796,6 +801,10 @@ d_r_arch_init(void)
         }
 #endif
     }
+
+    /* Ensure addressing registers fit into base+disp operand base and index fields. */
+    IF_AARCHXX(ASSERT_BITFIELD_TRUNCATE(REG_SPECIFIER_BITS, DR_REG_MAX_ADDRESSING_REG));
+
     mangle_init();
 }
 
@@ -905,7 +914,8 @@ arch_profile_exit()
 #endif /* WINDOWS_PC_SAMPLE */
 
 /* arch-specific atexit cleanup */
-void d_r_arch_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
+void
+d_r_arch_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
 {
     /* we only need to unprotect shared_code for profile extraction
      * so we do it there to also cover the fast exit path
@@ -1975,7 +1985,8 @@ fcache_return_routine_ex(dcontext_t *dcontext _IF_X86_64(gencode_mode_t mode))
     return (cache_pc)code->fcache_return;
 }
 
-cache_pc fcache_return_coarse_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
+cache_pc
+fcache_return_coarse_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
 {
     generated_code_t *code = get_shared_gencode(GLOBAL_DCONTEXT _IF_X86_64(mode));
     ASSERT(DYNAMO_OPTION(coarse_units));
@@ -1985,7 +1996,8 @@ cache_pc fcache_return_coarse_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
         return (cache_pc)code->fcache_return_coarse;
 }
 
-cache_pc trace_head_return_coarse_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
+cache_pc
+trace_head_return_coarse_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
 {
     generated_code_t *code = get_shared_gencode(GLOBAL_DCONTEXT _IF_X86_64(mode));
     ASSERT(DYNAMO_OPTION(coarse_units));
@@ -2321,8 +2333,8 @@ get_ibl_routine_name(dcontext_t *dcontext, cache_pc target, const char **ibl_brt
             }
         };
 #else
-    static const char *const ibl_routine_names[IBL_SOURCE_TYPE_END][IBL_LINK_STATE_END] =
-        {
+    static const char
+        *const ibl_routine_names[IBL_SOURCE_TYPE_END][IBL_LINK_STATE_END] = {
             { "shared_unlinked_bb_ibl", "shared_delete_bb_ibl", "shared_bb_far",
               "shared_bb_far_unlinked", "shared_bb_ibl", "shared_bb_ibl_template" },
             { "shared_unlinked_trace_ibl", "shared_delete_trace_ibl", "shared_trace_far",
@@ -2352,8 +2364,8 @@ get_ibl_routine_name(dcontext_t *dcontext, cache_pc target, const char **ibl_brt
     /* ibl_type is valid and will give routine or template name, and qualifier */
 
     *ibl_brtype_name = get_branch_type_name(ibl_type.branch_type);
-    return ibl_routine_names IF_X86_64(
-        [mode])[ibl_type.source_fragment_type][ibl_type.link_state];
+    return ibl_routine_names IF_X86_64([mode])[ibl_type.source_fragment_type]
+                                              [ibl_type.link_state];
 }
 
 static inline ibl_code_t *
@@ -2760,7 +2772,8 @@ fcache_enter_shared_routine(dcontext_t *dcontext)
         SHARED_GENCODE_MATCH_THREAD(dcontext)->fcache_enter);
 }
 
-cache_pc fcache_return_shared_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
+cache_pc
+fcache_return_shared_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
 {
     generated_code_t *code = get_shared_gencode(GLOBAL_DCONTEXT _IF_X86_64(mode));
     ASSERT(USE_SHARED_GENCODE());
@@ -2771,7 +2784,8 @@ cache_pc fcache_return_shared_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
 }
 
 #ifdef TRACE_HEAD_CACHE_INCR
-cache_pc trace_head_incr_shared_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
+cache_pc
+trace_head_incr_shared_routine(IF_X86_64_ELSE(gencode_mode_t mode, void))
 {
     generated_code_t *code = get_shared_gencode(GLOBAL_DCONTEXT _IF_X86_64(mode));
     ASSERT(USE_SHARED_GENCODE());
@@ -3097,7 +3111,10 @@ hook_vsyscall_return:
      */
     ASSERT(!method_changing);
     return false;
-#    endif /* X86/ARM */
+#    elif defined(RISCV64)
+    ASSERT_NOT_IMPLEMENTED(false);
+    return false;
+#    endif /* X86/ARM/RISCV64 */
 }
 
 bool
@@ -3138,7 +3155,10 @@ unhook_vsyscall(void)
 #    elif defined(AARCHXX)
     ASSERT_NOT_IMPLEMENTED(get_syscall_method() != SYSCALL_METHOD_SYSENTER);
     return false;
-#    endif /* X86/ARM */
+#    elif defined(RISCV64)
+    ASSERT_NOT_IMPLEMENTED(false);
+    return false;
+#    endif /* X86/ARM/RISCV64 */
 }
 #endif     /* LINUX */
 
@@ -3160,6 +3180,9 @@ check_syscall_method(dcontext_t *dcontext, instr_t *instr)
 #elif defined(AARCHXX)
     if (instr_get_opcode(instr) == OP_svc)
         new_method = SYSCALL_METHOD_SVC;
+#elif defined(RISCV64)
+    if (instr_get_opcode(instr) == OP_ecall)
+        new_method = SYSCALL_METHOD_ECALL;
 #endif /* X86/ARM */
     else
         ASSERT_NOT_REACHED();
@@ -3334,8 +3357,9 @@ does_syscall_ret_to_callsite(void)
 
     return (syscall_method == SYSCALL_METHOD_INT ||
             syscall_method == SYSCALL_METHOD_SYSCALL ||
+            syscall_method == SYSCALL_METHOD_SVC ||
             syscall_method ==
-                SYSCALL_METHOD_SVC IF_WINDOWS(|| syscall_method == SYSCALL_METHOD_WOW64)
+                SYSCALL_METHOD_ECALL IF_WINDOWS(|| syscall_method == SYSCALL_METHOD_WOW64)
                 /* The app is reported to be at whatever's in edx, so
                  * for our purposes it does return to the call site
                  * if we always mangle edx to point there.  Since we inline
@@ -3382,17 +3406,17 @@ size_t
 syscall_instr_length(dr_isa_mode_t mode)
 {
     size_t syslen;
-    IF_X86_ELSE(
-        {
-            ASSERT(INT_LENGTH == SYSCALL_LENGTH);
-            ASSERT(SYSENTER_LENGTH == SYSCALL_LENGTH);
-            syslen = SYSCALL_LENGTH;
-        },
-        {
-            syslen = IF_ARM_ELSE(
-                (mode == DR_ISA_ARM_THUMB ? SVC_THUMB_LENGTH : SVC_ARM_LENGTH),
-                SVC_LENGTH);
-        });
+#if defined(X86)
+    ASSERT(INT_LENGTH == SYSCALL_LENGTH);
+    ASSERT(SYSENTER_LENGTH == SYSCALL_LENGTH);
+    syslen = SYSCALL_LENGTH;
+#elif defined(RISCV64)
+    syslen = SYSCALL_LENGTH;
+#elif defined(ARM)
+    syslen = mode == DR_ISA_ARM_THUMB ? SVC_THUMB_LENGTH : SVC_ARM_LENGTH;
+#else
+    syslen = SVC_LENGTH;
+#endif
     return syslen;
 }
 
@@ -3444,8 +3468,14 @@ dr_mcontext_to_priv_mcontext(priv_mcontext_t *dst, dr_mcontext_t *src)
         if (TEST(DR_MC_CONTROL, src->flags)) {
             /* XXX i#2710: mc->lr should be under DR_MC_CONTROL */
             dst->xsp = src->xsp;
+#if defined(RISCV64)
+            if (src->size > offsetof(dr_mcontext_t, fcsr))
+                dst->fcsr = src->fcsr;
+#else
+            /* XXX i#5595: AArch64 should handle fpcr and fpsr here. */
             if (src->size > offsetof(dr_mcontext_t, xflags))
                 dst->xflags = src->xflags;
+#endif
             else
                 return false;
             if (src->size > offsetof(dr_mcontext_t, pc))
@@ -3520,6 +3550,18 @@ priv_mcontext_to_dr_mcontext(dr_mcontext_t *dst, priv_mcontext_t *src)
      */
     if (dst->size > sizeof(dr_mcontext_t))
         return false;
+#if defined(AARCH64)
+    /* We could support binary compatibility for clients built before the
+     * addition of AArch64's SVE support, by evaluating the machine context's
+     * user set-size field. But currently do not, preferring to detect
+     * incompatibility and asserting or returning false.
+     */
+    if (TEST(DR_MC_MULTIMEDIA, dst->flags) && dst->size != sizeof(dr_mcontext_t)) {
+        CLIENT_ASSERT(
+            false, "A pre-SVE client is running on an Arm AArch64 SVE DynamoRIO build!");
+        return false;
+    }
+#endif
     if (TESTALL(DR_MC_ALL, dst->flags) && dst->size == sizeof(dr_mcontext_t)) {
         *(priv_mcontext_t *)(&MCXT_FIRST_REG_FIELD(dst)) = *src;
     } else {
@@ -3538,8 +3580,14 @@ priv_mcontext_to_dr_mcontext(dr_mcontext_t *dst, priv_mcontext_t *src)
         }
         if (TEST(DR_MC_CONTROL, dst->flags)) {
             dst->xsp = src->xsp;
+#if defined(RISCV64)
+            if (dst->size > offsetof(dr_mcontext_t, fcsr))
+                dst->fcsr = src->fcsr;
+#else
+            /* XXX i#5595: AArch64 should handle fpcr and fpsr here. */
             if (dst->size > offsetof(dr_mcontext_t, xflags))
                 dst->xflags = src->xflags;
+#endif
             else
                 return false;
             if (dst->size > offsetof(dr_mcontext_t, pc))
@@ -3597,7 +3645,7 @@ priv_mcontext_to_dr_mcontext(dr_mcontext_t *dst, priv_mcontext_t *src)
                     return false;
                 memcpy(&dst->opmask, &src->opmask, sizeof(dst->opmask));
             }
-#else
+#elif defined(AARCHXX)
             /* FIXME i#1551: NYI on ARM */
             ASSERT_NOT_IMPLEMENTED(false);
 #endif
@@ -3663,7 +3711,24 @@ dump_mcontext(priv_mcontext_t *context, file_t f, bool dump_xml)
                    "\n\t\tr28=\"" PFX "\"\n\t\tr29=\"" PFX "\""
                    "\n\t\tr30=\"" PFX "\"\n\t\tr31=\"" PFX "\""
 #    endif /* X64 */
-#endif     /* X86/ARM */
+#elif defined(RISCV64)
+                   "\n\t\tx0=\"" PFX "\"\n\t\tx1=\"" PFX "\""
+                   "\n\t\tx2=\"" PFX "\"\n\t\tx3=\"" PFX "\""
+                   "\n\t\tx4=\"" PFX "\"\n\t\tx5=\"" PFX "\""
+                   "\n\t\tx6=\"" PFX "\"\n\t\tx7=\"" PFX "\""
+                   "\n\t\tx8=\"" PFX "\"\n\t\tx9=\"" PFX "\""
+                   "\n\t\tx10=\"" PFX "\"\n\t\tx11=\"" PFX "\""
+                   "\n\t\tx12=\"" PFX "\"\n\t\tx13=\"" PFX "\""
+                   "\n\t\tx14=\"" PFX "\"\n\t\tx15=\"" PFX "\""
+                   "\n\t\tx16=\"" PFX "\"\n\t\tx17=\"" PFX "\""
+                   "\n\t\tx18=\"" PFX "\"\n\t\tx19=\"" PFX "\""
+                   "\n\t\tx20=\"" PFX "\"\n\t\tx21=\"" PFX "\""
+                   "\n\t\tx22=\"" PFX "\"\n\t\tx23=\"" PFX "\""
+                   "\n\t\tx24=\"" PFX "\"\n\t\tx25=\"" PFX "\""
+                   "\n\t\tx26=\"" PFX "\"\n\t\tx27=\"" PFX "\""
+                   "\n\t\tx28=\"" PFX "\"\n\t\tx29=\"" PFX "\""
+                   "\n\t\tx30=\"" PFX "\"\n\t\tx31=\"" PFX "\""
+#endif /* X86/ARM/RISCV64 */
                  : "priv_mcontext_t @" PFX "\n"
 #ifdef X86
                    "\txax = " PFX "\n\txbx = " PFX "\n\txcx = " PFX "\n\txdx = " PFX "\n"
@@ -3683,7 +3748,16 @@ dump_mcontext(priv_mcontext_t *context, file_t f, bool dump_xml)
                    "\tr24 = " PFX "\n\tr25 = " PFX "\n\tr26 = " PFX "\n\tr27 = " PFX "\n"
                    "\tr28 = " PFX "\n\tr29 = " PFX "\n\tr30 = " PFX "\n\tr31 = " PFX "\n"
 #    endif /* X64 */
-#endif     /* X86/ARM */
+#elif defined(RISCV64)
+                   "\tx0  = " PFX "\n\tx1  = " PFX "\n\tx2  = " PFX "\n\tx3  = " PFX "\n"
+                   "\tx4  = " PFX "\n\tx5  = " PFX "\n\tx6  = " PFX "\n\tx7  = " PFX "\n"
+                   "\tx8  = " PFX "\n\tx9  = " PFX "\n\tx10 = " PFX "\n\tx11 = " PFX "\n"
+                   "\tx12 = " PFX "\n\tx13 = " PFX "\n\tx14 = " PFX "\n\tx15 = " PFX "\n"
+                   "\tx16 = " PFX "\n\tx17 = " PFX "\n\tx18 = " PFX "\n\tx19 = " PFX "\n"
+                   "\tx20 = " PFX "\n\tx21 = " PFX "\n\tx22 = " PFX "\n\tx23 = " PFX "\n"
+                   "\tx24 = " PFX "\n\tx25 = " PFX "\n\tx26 = " PFX "\n\tx27 = " PFX "\n"
+                   "\tx28 = " PFX "\n\tx29 = " PFX "\n\tx30 = " PFX "\n\tx31 = " PFX "\n"
+#endif /* X86/ARM/RISCV64 */
         ,
         context,
 #ifdef X86
@@ -3704,7 +3778,14 @@ dump_mcontext(priv_mcontext_t *context, file_t f, bool dump_xml)
         context->r21, context->r22, context->r23, context->r24, context->r25,
         context->r26, context->r27, context->r28, context->r29, context->r30, context->r31
 #    endif /* X64 */
-#endif     /* X86/ARM */
+#elif defined(RISCV64)
+        context->x0, context->x1, context->x2, context->x3, context->x4, context->x5,
+        context->x6, context->x7, context->x8, context->x9, context->x10, context->x11,
+        context->x12, context->x13, context->x14, context->x15, context->x16,
+        context->x17, context->x18, context->x19, context->x20, context->x21,
+        context->x22, context->x23, context->x24, context->x25, context->x26,
+        context->x27, context->x28, context->x29, context->x30, context->x31
+#endif /* X86/ARM/RISCV64 */
     );
 
 #ifdef X86
@@ -3747,21 +3828,32 @@ dump_mcontext(priv_mcontext_t *context, file_t f, bool dump_xml)
 #elif defined(AARCHXX)
     {
         int i, j;
+#    ifdef AARCH64
+        int words = proc_has_feature(FEATURE_SVE) ? 16 : 4;
+#    else
+        int words = 4;
+#    endif
         /* XXX: should be proc_num_simd_saved(). */
         for (i = 0; i < proc_num_simd_registers(); i++) {
             print_file(f, dump_xml ? "\t\tqd= \"0x" : "\tq%-3d= 0x", i);
-            for (j = 0; j < 4; j++) {
+            for (j = 0; j < words; j++) {
                 print_file(f, "%08x ", context->simd[i].u32[j]);
             }
             print_file(f, dump_xml ? "\"\n" : "\n");
         }
+        /* TODO i#5365: SVE predicate registers and FFR dump. */
     }
 #endif
 
+#if defined(RISCV64)
+    print_file(f, dump_xml ? "\n\t\tpc=\"" PFX "\" />\n" : "\tpc     = " PFX "\n",
+               context->pc);
+#else
     print_file(f,
                dump_xml ? "\n\t\teflags=\"" PFX "\"\n\t\tpc=\"" PFX "\" />\n"
                         : "\teflags = " PFX "\n\tpc     = " PFX "\n",
                context->xflags, context->pc);
+#endif
 }
 
 #ifdef AARCHXX
@@ -3801,7 +3893,7 @@ get_time()
 bool
 is_ibl_routine_type(dcontext_t *dcontext, cache_pc target, ibl_branch_type_t branch_type)
 {
-    ibl_type_t ibl_type;
+    ibl_type_t ibl_type = { 0 };
     DEBUG_DECLARE(bool is_ibl =)
     get_ibl_routine_type_ex(dcontext, target, &ibl_type _IF_X86_64(NULL));
     ASSERT(is_ibl);

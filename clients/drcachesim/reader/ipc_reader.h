@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2015-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2015-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 /* ipc_reader: obtains memory streams from DR clients running in
- * application processes and presents them via an interator interface
+ * application processes and presents them via an iterator interface
  * to the cache simulator.
  */
 
@@ -43,28 +43,25 @@
 #include "../common/named_pipe.h"
 #include "../common/trace_entry.h"
 
+namespace dynamorio {
+namespace drmemtrace {
+
 class ipc_reader_t : public reader_t {
 public:
     ipc_reader_t();
     ipc_reader_t(const char *ipc_name, int verbosity);
     virtual ~ipc_reader_t();
-    bool operator!() override;
+    bool
+    operator!() override;
     // This potentially blocks.
     bool
     init() override;
     std::string
-    get_pipe_name() const;
+    get_stream_name() const override;
 
 protected:
     trace_entry_t *
     read_next_entry() override;
-
-    bool
-    read_next_thread_entry(size_t, trace_entry_t *, bool *) override
-    {
-        // Only an interleaved stream is supported.
-        return false;
-    }
 
 private:
     named_pipe_t pipe_;
@@ -79,5 +76,8 @@ private:
     trace_entry_t *cur_buf_;
     trace_entry_t *end_buf_;
 };
+
+} // namespace drmemtrace
+} // namespace dynamorio
 
 #endif /* _IPC_READER_H_ */

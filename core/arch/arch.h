@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2010-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2010-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -106,6 +106,7 @@ mixed_mode_enabled(void)
 #    endif /* X64 */
 #    define SIMD_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, simd)))
 #    define OPMASK_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, opmask)))
+#    define XFLAGS_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, xflags)))
 #    define SCRATCH_REG0 DR_REG_XAX
 #    define SCRATCH_REG1 DR_REG_XBX
 #    define SCRATCH_REG2 DR_REG_XCX
@@ -118,6 +119,10 @@ mixed_mode_enabled(void)
 #    define SCRATCH_REG3_OFFS XDX_OFFSET
 #    define SCRATCH_REG4_OFFS XSI_OFFSET
 #    define SCRATCH_REG5_OFFS XDI_OFFSET
+#    define CALL_SCRATCH_REG DR_REG_R11
+#    define MC_IBL_REG xcx
+#    define MC_RETVAL_REG xax
+#    define SS_RETVAL_REG xax
 #elif defined(AARCHXX)
 #    define R0_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, r0)))
 #    define REG0_OFFSET R0_OFFSET
@@ -136,8 +141,8 @@ mixed_mode_enabled(void)
 #    define R12_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, r12)))
 #    define R13_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, r13)))
 #    define R14_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, r14)))
-#    define XFLAGS_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, xflags)))
 #    define PC_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, pc)))
+#    define XFLAGS_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, xflags)))
 #    define SCRATCH_REG0 DR_REG_R0
 #    define SCRATCH_REG1 DR_REG_R1
 #    define SCRATCH_REG2 DR_REG_R2
@@ -151,9 +156,41 @@ mixed_mode_enabled(void)
 #    define SCRATCH_REG4_OFFS R4_OFFSET
 #    define SCRATCH_REG5_OFFS R5_OFFSET
 #    define REG_OFFSET(reg) (R0_OFFSET + ((reg)-DR_REG_R0) * sizeof(reg_t))
-#endif /* X86/ARM */
+#    define CALL_SCRATCH_REG DR_REG_R11
+#    define MC_IBL_REG r2
+#    define MC_RETVAL_REG r0
+#    define SS_RETVAL_REG r0
+#elif defined(RISCV64)
+#    define X0_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, x0)))
+#    define X1_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, x1)))
+#    define F0_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, f0)))
+#    define REG0_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, a0)))
+#    define REG1_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, a1)))
+#    define REG2_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, a2)))
+#    define REG3_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, a3)))
+#    define REG4_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, a4)))
+#    define REG5_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, a5)))
+#    define XFLAGS_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, fcsr)))
+#    define SCRATCH_REG0 DR_REG_A0
+#    define SCRATCH_REG1 DR_REG_A1
+#    define SCRATCH_REG2 DR_REG_A2
+#    define SCRATCH_REG3 DR_REG_A3
+#    define SCRATCH_REG4 DR_REG_A4
+#    define SCRATCH_REG5 DR_REG_A5
+#    define SCRATCH_REG0_OFFS REG0_OFFSET
+#    define SCRATCH_REG1_OFFS REG1_OFFSET
+#    define SCRATCH_REG2_OFFS REG2_OFFSET
+#    define SCRATCH_REG3_OFFS REG3_OFFSET
+#    define SCRATCH_REG4_OFFS REG4_OFFSET
+#    define SCRATCH_REG5_OFFS REG5_OFFSET
+#    define REG_OFFSET(reg) (X0_OFFSET + ((reg)-DR_REG_X0) * sizeof(reg_t))
+/* FIXME i#3544: Check is T6 safe to use */
+#    define CALL_SCRATCH_REG DR_REG_T6
+#    define MC_IBL_REG a2
+#    define MC_RETVAL_REG a0
+#    define SS_RETVAL_REG a0
+#endif /* X86/ARM/RISCV64 */
 #define XSP_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, xsp)))
-#define XFLAGS_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, xflags)))
 #define PC_OFFSET ((MC_OFFS) + (offsetof(priv_mcontext_t, pc)))
 
 /* the register holds dcontext on fcache enter/return */
@@ -216,6 +253,7 @@ reg_spill_tls_offs(reg_id_t reg);
 #define REG_SAVED_XMM0 (YMM_ENABLED() ? REG_YMM0 : REG_XMM0)
 #define OPSZ_SAVED_OPMASK (proc_has_feature(FEATURE_AVX512BW) ? OPSZ_8 : OPSZ_2)
 
+#ifdef X86
 /* Xref the partially overlapping CONTEXT_PRESERVE_XMM */
 /* This routine also determines whether ymm registers should be saved. */
 static inline bool
@@ -232,7 +270,6 @@ preserve_xmm_caller_saved(void)
     return proc_has_feature(FEATURE_SSE) /* do xmm registers exist? */;
 }
 
-#ifdef X86
 /* This is used for AVX-512 context switching and indicates whether AVX-512 has been seen
  * during decode. The variable is allocated on reachable heap during initialization.
  */
@@ -590,6 +627,8 @@ mangle_insert_clone_code(dcontext_t *dcontext, instrlist_t *ilist,
 #    define ABI_STACK_ALIGNMENT 16
 #elif defined(ARM)
 #    define ABI_STACK_ALIGNMENT 8
+#elif defined(RISCV64)
+#    define ABI_STACK_ALIGNMENT 8
 #endif
 
 /* Returns the number of bytes the stack pointer has to be aligned to. */
@@ -636,14 +675,18 @@ void
 convert_to_near_rel(dcontext_t *dcontext, instr_t *instr);
 instr_t *
 convert_to_near_rel_meta(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr);
+
 #ifdef AARCH64
+typedef enum { GPR_REG_TYPE, SIMD_REG_TYPE, SVE_ZREG_TYPE, SVE_PREG_TYPE } reg_type_t;
+
 void
 insert_save_inline_registers(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
-                             bool *reg_skip, reg_id_t first_reg, bool is_gpr, void *ci);
+                             bool *reg_skip, reg_id_t first_reg, reg_type_t rtype,
+                             void *ci);
 
 void
 insert_restore_inline_registers(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
-                                bool *reg_skip, reg_id_t first_reg, bool is_gpr,
+                                bool *reg_skip, reg_id_t first_reg, reg_type_t rtype,
                                 void *ci);
 
 #endif
@@ -1336,7 +1379,23 @@ new_thread_setup(priv_mcontext_t *mc);
 #    ifdef MACOS
 void
 new_bsdthread_setup(priv_mcontext_t *mc);
+/* Enable writing to MAP_JIT pages.
+ * This is for the local thread only and not process-wide.
+ */
+
+#        define PTHREAD_JIT_WRITE() pthread_jit_write_protect_np(false)
+/* Enable writing to MAP_JIT pages.
+ * This is for the local thread only and not process-wide.
+ */
+#        define PTHREAD_JIT_READ() pthread_jit_write_protect_np(true)
+void
+pthread_jit_write_protect_np(int);
 #    endif
+#endif
+
+#ifndef PTHREAD_JIT_WRITE
+#    define PTHREAD_JIT_WRITE()
+#    define PTHREAD_JIT_READ()
 #endif
 
 void
@@ -1521,10 +1580,7 @@ add_patch_entry_internal(patch_list_t *patch, instr_t *instr, ushort patch_flags
 cache_pc
 get_direct_exit_target(dcontext_t *dcontext, uint flags);
 
-#ifdef AARCHXX
-size_t
-get_fcache_return_tls_offs(dcontext_t *dcontext, uint flags);
-
+#if defined(AARCHXX) || defined(RISCV64)
 size_t
 get_ibl_entry_tls_offs(dcontext_t *dcontext, cache_pc ibl_entry);
 #endif
@@ -1770,5 +1826,8 @@ append_ibl_head(dcontext_t *dcontext, instrlist_t *ilist, ibl_code_t *ibl_code,
 void
 instrlist_convert_to_x86(instrlist_t *ilist);
 #endif
-
+#ifdef AARCHXX
+bool
+mrs_id_reg_supported(void);
+#endif
 #endif /* ARCH_H */

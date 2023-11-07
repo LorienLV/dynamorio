@@ -5,24 +5,28 @@ create dir .*
 create dir .*
 open file .*
 open file .*
-pre-DR start
+open file .*
+pre-DR start.*
 0: writing [0-9]+ bytes .*
 1: writing [0-9]+ bytes .*
 restore the write file function
 pre-DR detach
 close file .*
 2: writing [0-9]+ bytes .*
+3: writing [0-9]+ bytes .*
+close file .*
+close file .*
 close file .*
 all done
 Cache simulation results:
 Core #0 \(1 thread\(s\)\)
-  L1I stats:
+  L1I0 .* stats:
     Hits:                         *[0-9,\.]*
     Misses:                       *[0-9,\.]*
     Compulsory misses:            *[0-9,\.]*
     Invalidations:                *0
 .*    Miss rate:                        [0-3][,\.]..%
-  L1D stats:
+  L1D0 .* stats:
     Hits:                         *[0-9,\.]*
     Misses:                       *[0-9,\.]*
     Compulsory misses:            *[0-9,\.]*
@@ -31,7 +35,7 @@ Core #0 \(1 thread\(s\)\)
 Core #1 \(0 thread\(s\)\)
 Core #2 \(0 thread\(s\)\)
 Core #3 \(0 thread\(s\)\)
-LL stats:
+LL .* stats:
     Hits:                         *[0-9,\.]*
     Misses:                       *[0-9,\.]*
     Compulsory misses:            *[0-9,\.]*

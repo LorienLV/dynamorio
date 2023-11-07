@@ -71,6 +71,7 @@ typedef struct _cpu_info_t {
     uint vendor;
 #ifdef AARCHXX
     uint architecture;
+    uint sve_vector_length_bytes;
 #endif
     uint family;
     uint type;
@@ -102,7 +103,7 @@ void
 proc_init_arch(void);
 
 void
-set_cache_size(uint val, uint *dst);
+proc_set_cache_size(uint val, uint *dst);
 
 #ifdef AARCHXX
 uint

@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -218,12 +218,13 @@ typedef struct _empty_slot_t {
 
 /* for -pad_jmps_shift_{bb,trace} we may have shifted the start_pc forward by up
  * to START_PC_ALIGNMENT-1 bytes, back align to get the right header pointer */
-#define FRAG_START_PADDING(f)                                                         \
-    ((TEST(FRAG_IS_EMPTY_SLOT, (f)->flags) || !PAD_JMPS_SHIFT_START((f)->flags))      \
-         ? 0                                                                          \
-         : (ASSERT(CHECK_TRUNCATE_TYPE_uint((ptr_uint_t)(                             \
-                (f)->start_pc - ALIGN_BACKWARD((f)->start_pc, START_PC_ALIGNMENT)))), \
-            (uint)((ptr_uint_t)(f)->start_pc -                                        \
+#define FRAG_START_PADDING(f)                                                      \
+    ((TEST(FRAG_IS_EMPTY_SLOT, (f)->flags) || !PAD_JMPS_SHIFT_START((f)->flags))   \
+         ? 0                                                                       \
+         : (ASSERT(CHECK_TRUNCATE_TYPE_uint(                                       \
+                (ptr_uint_t)((f)->start_pc -                                       \
+                             ALIGN_BACKWARD((f)->start_pc, START_PC_ALIGNMENT)))), \
+            (uint)((ptr_uint_t)(f)->start_pc -                                     \
                    ALIGN_BACKWARD((f)->start_pc, START_PC_ALIGNMENT))))
 
 #define FRAG_HDR_START(f) (FRAG_START(f) - HEADER_SIZE(f) - FRAG_START_PADDING(f))
@@ -4243,10 +4244,12 @@ fcache_reset_all_caches_proactively(uint target)
     /* no lock needed */
     dynamo_resetting = true;
 
-    IF_AARCHXX({
-        if (INTERNAL_OPTION(steal_reg_at_reset) != 0)
-            arch_reset_stolen_reg();
-    });
+#ifdef AARCHXX
+    if (INTERNAL_OPTION(steal_reg_at_reset) != 0)
+        arch_reset_stolen_reg();
+#elif defined(RISCV64)
+    ASSERT_NOT_IMPLEMENTED(false);
+#endif
 
     /* We free everything before re-init so we can free all heap units.
      * For everything to be freed, it must either be individually freed,
@@ -4498,7 +4501,7 @@ void
 fcache_low_on_memory()
 {
     fcache_unit_t *u, *next_u;
-    size_t freed = 0;
+    DEBUG_DECLARE(size_t freed = 0;)
 
 #if 0
     dcontext_t *dcontext = get_thread_private_dcontext();
@@ -4542,7 +4545,7 @@ fcache_low_on_memory()
         u = allunits->dead;
         while (u != NULL) {
             next_u = u->next_global;
-            freed += u->size;
+            IF_DEBUG(freed += u->size;)
             fcache_really_free_unit(u, true /*on dead list*/, true /*dealloc*/);
             u = next_u;
         }

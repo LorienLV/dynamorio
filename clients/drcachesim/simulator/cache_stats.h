@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2015-2020 Google, Inc.  All rights reserved.
+ * Copyright (c) 2015-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -36,8 +36,15 @@
 #ifndef _CACHE_STATS_H_
 #define _CACHE_STATS_H_ 1
 
+#include <stdint.h>
+
 #include <string>
+
 #include "caching_device_stats.h"
+#include "memref.h"
+
+namespace dynamorio {
+namespace drmemtrace {
 
 class cache_stats_t : public caching_device_stats_t {
 public:
@@ -46,7 +53,7 @@ public:
 
     // In addition to caching_device_stats_t::access,
     // cache_stats_t::access processes prefetching requests.
-    void
+    virtual void
     access(const memref_t &memref, bool hit,
            caching_device_block_t *cache_block) override;
 
@@ -66,9 +73,12 @@ protected:
 
     // A CPU cache handles flushes and prefetching requests
     // as well as regular memory accesses.
-    int_least64_t num_flushes_;
-    int_least64_t num_prefetch_hits_;
-    int_least64_t num_prefetch_misses_;
+    int64_t num_flushes_;
+    int64_t num_prefetch_hits_;
+    int64_t num_prefetch_misses_;
 };
+
+} // namespace drmemtrace
+} // namespace dynamorio
 
 #endif /* _CACHE_STATS_H_ */

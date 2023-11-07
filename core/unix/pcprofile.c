@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2001-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -159,7 +159,6 @@ pcprofile_thread_init(dcontext_t *dcontext, bool shared_itimer, void *parent_inf
 void
 pcprofile_thread_exit(dcontext_t *dcontext)
 {
-    int size;
     thread_pc_info_t *info = (thread_pc_info_t *)dcontext->pcprofile_field;
     /* don't want any alarms while holding lock for printing results
      * (see notes under pcprofile_cache_flush below)
@@ -167,7 +166,7 @@ pcprofile_thread_exit(dcontext_t *dcontext)
     set_itimer_callback(dcontext, ITIMER_VIRTUAL, 0, NULL, NULL);
 
     pcprofile_results(info);
-    size = HASHTABLE_SIZE(HASH_BITS) * sizeof(pc_profile_entry_t *);
+    DEBUG_DECLARE(int size = HASHTABLE_SIZE(HASH_BITS) * sizeof(pc_profile_entry_t *);)
     pcprofile_reset(info); /* special heap so no fast path */
 #ifdef DEBUG
     /* for non-debug we do fast exit path and don't free local heap */
@@ -548,10 +547,12 @@ pcprofile_results(thread_pc_info_t *info)
                     print_file(info->file, " dispatch\n");
                 } else if (e->whereami == DR_WHERE_MONITOR) {
                     print_file(info->file, " monitor\n");
-                } else if (e->whereami == DR_WHERE_SIGNAL_HANDLER) {
-                    print_file(info->file, " signal handler\n");
                 } else if (e->whereami == DR_WHERE_SYSCALL_HANDLER) {
                     print_file(info->file, " syscall handler\n");
+                } else if (e->whereami == DR_WHERE_SIGNAL_HANDLER) {
+                    print_file(info->file, " signal handler\n");
+                } else if (e->whereami == DR_WHERE_TRAMPOLINE) {
+                    print_file(info->file, " trampoline\n");
                 } else if (e->whereami == DR_WHERE_CONTEXT_SWITCH) {
                     print_file(info->file, " context switch\n");
                 } else if (e->whereami == DR_WHERE_IBL) {

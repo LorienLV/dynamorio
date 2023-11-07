@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2015-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2015-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -31,8 +31,25 @@
  */
 
 #include "cache.h"
-#include "../common/utils.h"
-#include <assert.h>
+
+#include <stddef.h>
+
+#include <utility>
+#include <vector>
+
+#include "memref.h"
+#include "cache_line.h"
+#include "cache_stats.h"
+#include "caching_device.h"
+#include "caching_device_block.h"
+#include "caching_device_stats.h"
+#include "prefetcher.h"
+#include "trace_entry.h"
+
+namespace dynamorio {
+namespace drmemtrace {
+
+class snoop_filter_t;
 
 bool
 cache_t::init(int associativity, int line_size, int total_size, caching_device_t *parent,
@@ -40,6 +57,9 @@ cache_t::init(int associativity, int line_size, int total_size, caching_device_t
               bool coherent_cache, int id, snoop_filter_t *snoop_filter,
               const std::vector<caching_device_t *> &children)
 {
+    // Check line_size to avoid divide-by-0.
+    if (line_size < 1)
+        return false;
     // convert total_size to num_blocks to fit for caching_device_t::init
     int num_lines = total_size / line_size;
 
@@ -82,3 +102,6 @@ cache_t::flush(const memref_t &memref)
     if (stats_ != NULL)
         ((cache_stats_t *)stats_)->flush(memref);
 }
+
+} // namespace drmemtrace
+} // namespace dynamorio

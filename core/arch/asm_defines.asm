@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2023 Google, Inc.  All rights reserved.
  * Copyright (c) 2008-2009 VMware, Inc.  All rights reserved.
  * ********************************************************** */
 
@@ -35,8 +35,8 @@
 #define _ASM_DEFINES_ASM_ 1
 
 /* Preprocessor macro definitions shared among all .asm files.
- * Since cpp macros can't generate newlines we have a later
- * script replace @N@ for us.
+ * Since cpp macros can't generate newlines and #s we have a later
+ * script replace @N@ and @P@ respectively for us, see: make/CMake_asm.cmake.
  */
 
 #include "configure.h"
@@ -86,6 +86,10 @@
 # error ARM/AArch64 on Windows is not supported
 #endif
 
+#if defined(RISCV64) && defined(WINDOWS)
+# error RISC-V on Windows is not supported
+#endif
+
 #undef WEAK /* avoid conflict with C define */
 
 /* This is the alignment needed by both x64 and 32-bit code except
@@ -99,23 +103,77 @@
 # define START_DATA .data
 # define START_FILE .text
 # define END_FILE /* nothing */
-# define DECLARE_FUNC(symbol) \
+
+# if defined(MACOS) && defined(AARCH64)
+
+/* The Mac assembler isn't resolving macro args so we have to force it to
+ * support FUNCNAME used in many files.
+ */
+#  define DECLARE_FUNC(symbol) DECLARE_FUNC_EVAL(symbol)
+#  define DECLARE_FUNC_EVAL(symbol) \
+.p2align 2 @N@ \
+.globl _##symbol @N@ \
+.private_extern _##symbol @N@
+
+#  define DECLARE_EXPORTED_FUNC(symbol) DECLARE_EXPORTED_FUNC_EVAL(symbol)
+#  define DECLARE_EXPORTED_FUNC_EVAL(symbol) \
+.p2align 2 @N@ \
+.globl _##symbol @N@
+
+#  define DECLARE_GLOBAL(symbol) \
+.globl _##symbol @N@\
+.private_extern _##symbol
+
+#  define GLOBAL_LABEL(label) GLOBAL_LABEL_EVAL(label)
+#  define GLOBAL_LABEL_EVAL(label) _##label
+#  define GLOBAL_REF(label) _##label
+
+#  define AARCH64_ADRP_GOT(sym, reg) \
+adrp reg, sym@PAGE @N@\
+add reg, reg, sym@PAGEOFF
+
+#  define AARCH64_ADRP_GOT_LDR(sym, reg) \
+adrp reg, sym@PAGE @N@ \
+ldr  reg, [reg, sym@PAGEOFF]
+
+# else
+
+#  define DECLARE_FUNC(symbol) \
 .align 0 @N@\
 .global symbol @N@\
 .hidden symbol @N@\
 .type symbol, %function
-# define DECLARE_EXPORTED_FUNC(symbol) \
+
+#  define DECLARE_EXPORTED_FUNC(symbol) \
 .align 0 @N@\
 .global symbol @N@\
 .type symbol, %function
-# define END_FUNC(symbol) /* nothing */
-# define DECLARE_GLOBAL(symbol) \
+
+#  define DECLARE_GLOBAL(symbol) \
 .global symbol @N@\
 .hidden symbol
-# define GLOBAL_LABEL(label) label
+
+#  define GLOBAL_LABEL(label) label
+#  define GLOBAL_REF(label) label
+
+#  define AARCH64_ADRP_GOT(sym, reg) \
+adrp reg, sym @N@ \
+add reg, reg, @P@:lo12:sym
+
+#  define AARCH64_ADRP_GOT_LDR(sym, reg) \
+adrp reg, :got:sym @N@ \
+ldr  reg, [reg, @P@:got_lo12:sym]
+
+# endif
+
+# define END_FUNC(symbol) /* nothing */
+#if defined(MACOS) && defined(AARCH64)
+# define ADDRTAKEN_LABEL(label) _##label
+# define WEAK(name) .weak_definition name
+#else
 # define ADDRTAKEN_LABEL(label) label
-# define GLOBAL_REF(label) label
 # define WEAK(name) .weak name
+#endif
 # ifdef X86
 #  define BYTE byte ptr
 #  define WORD word ptr
@@ -146,6 +204,8 @@
 #  define SYMREF(sym) =sym
 # endif
 # ifdef X86
+#  define HEX(n) 0x##n
+# elif defined(RISCV64)
 #  define HEX(n) 0x##n
 # else
 #  define POUND #
@@ -245,13 +305,14 @@ ASSUME fs:_DATA @N@\
 # define START_FILE SECTION .text
 # define END_FILE /* nothing */
 /* for MacOS, at least, we have to add _ ourselves */
-# define DECLARE_FUNC(symbol) global _##symbol
-# define DECLARE_EXPORTED_FUNC(symbol) global _##symbol
+# define CONCAT(a, b) a ## b
+# define DECLARE_FUNC(symbol) global CONCAT(_, symbol)
+# define DECLARE_EXPORTED_FUNC(symbol) global CONCAT(_, symbol)
 # define END_FUNC(symbol) /* nothing */
-# define DECLARE_GLOBAL(symbol) global _##symbol
-# define GLOBAL_LABEL(label) _##label
-# define ADDRTAKEN_LABEL(label) _##label
-# define GLOBAL_REF(label) _##label
+# define DECLARE_GLOBAL(symbol) global CONCAT(_, symbol)
+# define GLOBAL_LABEL(label) CONCAT(_, label)
+# define ADDRTAKEN_LABEL(label) CONCAT(_, label)
+# define GLOBAL_REF(label) CONCAT(_, label)
 # define WEAK(name) /* no support */
 # define BYTE byte
 # define WORD word
@@ -318,6 +379,45 @@ ASSUME fs:_DATA @N@\
 # define REG_R11 x11
 # define REG_R12 x12
 /* skip [x13..x30], not available on AArch32 */
+#  if defined(MACOS)
+#   define SYSNUM_REG w16
+#  else
+#   define SYSNUM_REG w8
+#  endif /* MACOS */
+#elif defined(RISCV64)
+# define REG_SP   sp
+# define REG_R0   x0
+# define REG_R1   x1
+# define REG_R2   x2
+# define REG_R3   x3
+# define REG_R4   x4
+# define REG_R5   x5
+# define REG_R6   x6
+# define REG_R7   x7
+# define REG_R8   x8
+# define REG_R9   x9
+# define REG_R10  x10
+# define REG_R11  x11
+# define REG_R12  x12
+# define REG_R13  x13
+# define REG_R14  x14
+# define REG_R15  x15
+# define REG_R16  x16
+# define REG_R17  x17
+# define REG_R18  x18
+# define REG_R19  x19
+# define REG_R20  x20
+# define REG_R21  x21
+# define REG_R22  x22
+# define REG_R23  x23
+# define REG_R24  x24
+# define REG_R25  x25
+# define REG_R26  x26
+# define REG_R27  x27
+# define REG_R28  x28
+# define REG_R29  x29
+# define REG_R30  x30
+# define REG_R31  x31
 #else /* Intel X86 */
 # ifdef X64
 #  define REG_XAX rax
@@ -439,6 +539,51 @@ ASSUME fs:_DATA @N@\
 #  define RESTORE_PRESERVED_REGS ldp REG_PRESERVED_1, LR, [sp], #16
 # endif
 
+#elif defined(RISCV64)
+/* RISC-V psABI calling convention:
+ * x0(zero)         : Hard-wired zero
+ * x1(ra)           : Return address
+ * x2(sp)           : Stack pointer (callee saved)
+ * x3(gp)           : Global pointer
+ * x4(tp)           : Thread pointer
+ * x5(t0)           : Temporary/alternate link register
+ * x6..7(t1..2)     : Temporaries
+ * x8(s0/fp)        : Callee saved register/frame pointer
+ * x9(s1)           : Callee saved register
+ * x10..11(a0..1)   : Function arguments/return values
+ * x12..17(a2..7)   : Function arguments
+ * x18..27(s2..11)  : Callee saved registers
+ * x28..31(t3..6)   : Temporaries
+ *
+ * f0..7(ft0..7)    : FP temporaries
+ * f8..9(fs0..1)    : FP callee saved registers
+ * f10..11(fa0..1)  : FP arguments/return values
+ * f12..17(fa2..7)  : FP arguments
+ * f18..27(fs2..11) : FP callee saved registers
+ * f28..31(ft8..11) : FP temporaries
+ */
+# define ARG1 REG_R10
+# define ARG2 REG_R11
+# define ARG3 REG_R12
+# define ARG4 REG_R13
+# define ARG5 REG_R14
+# define ARG6 REG_R15
+# define ARG7 REG_R16
+# define ARG8 REG_R17
+# define SYSNUM_REG REG_R17
+/* Arguments are passed on stack right-to-left. */
+# define ARG9  0(REG_SP) /* no ret addr */
+# define ARG10 ARG_SZ(REG_SP)
+# define ARG1_NORETADDR  ARG1
+# define ARG2_NORETADDR  ARG2
+# define ARG3_NORETADDR  ARG3
+# define ARG4_NORETADDR  ARG4
+# define ARG5_NORETADDR  ARG5
+# define ARG6_NORETADDR  ARG6
+# define ARG7_NORETADDR  ARG7
+# define ARG8_NORETADDR  ARG8
+# define ARG9_NORETADDR  ARG9
+# define ARG10_NORETADDR ARG10
 #else /* Intel X86 */
 # ifdef X64
 #  ifdef WINDOWS
@@ -770,6 +915,103 @@ ASSUME fs:_DATA @N@\
         mov      ARG2, p2   @N@\
         mov      ARG1, p1   @N@\
         blx      callee
+#elif defined(RISCV64)
+/* For RISC-V, there is no instruction which can operate on both immediates
+ * and registers. Here is a macro that judges whether its argument is a
+ * register or not.
+ */
+.set reg.x0,    1
+.set reg.zero,  1
+.set reg.x1,    1
+.set reg.ra,    1
+.set reg.x2,    1
+.set reg.sp,    1
+.set reg.x3,    1
+.set reg.gp,    1
+.set reg.x4,    1
+.set reg.tp,    1
+.set reg.x5,    1
+.set reg.t0,    1
+.set reg.x6,    1
+.set reg.t1,    1
+.set reg.x7,    1
+.set reg.t2,    1
+.set reg.x8,    1
+.set reg.s0,    1
+.set reg.fp,    1
+.set reg.x9,    1
+.set reg.s1,    1
+.set reg.x10,   1
+.set reg.a0,    1
+.set reg.x11,   1
+.set reg.a1,    1
+.set reg.x12,   1
+.set reg.a2,    1
+.set reg.x13,   1
+.set reg.a3,    1
+.set reg.x14,   1
+.set reg.a4,    1
+.set reg.x15,   1
+.set reg.a5,    1
+.set reg.x16,   1
+.set reg.a6,    1
+.set reg.x17,   1
+.set reg.a7,    1
+.set reg.x18,   1
+.set reg.s2,    1
+.set reg.x19,   1
+.set reg.s3,    1
+.set reg.x20,   1
+.set reg.s4,    1
+.set reg.x21,   1
+.set reg.s5,    1
+.set reg.x22,   1
+.set reg.s6,    1
+.set reg.x23,   1
+.set reg.s7,    1
+.set reg.x24,   1
+.set reg.s8,    1
+.set reg.x25,   1
+.set reg.s9,    1
+.set reg.x26,   1
+.set reg.s10,   1
+.set reg.x27,   1
+.set reg.s11,   1
+.set reg.x28,   1
+.set reg.t3,    1
+.set reg.x29,   1
+.set reg.t4,    1
+.set reg.x30,   1
+.set reg.t5,    1
+.set reg.x31,   1
+.set reg.t6,    1
+.macro MOV reg, p
+  .ifdef "reg.\p"
+        mv      \reg, \p
+  .else
+        li      \reg, \p
+  .endif
+.endm
+# define CALLC0(callee)    \
+        call     callee
+# define CALLC1(callee, p1)    \
+        MOV      ARG1, p1   @N@\
+        call     callee
+# define CALLC2(callee, p1, p2)    \
+        MOV      ARG2, p2   @N@\
+        MOV      ARG1, p1   @N@\
+        call     callee
+# define CALLC3(callee, p1, p2, p3)    \
+        MOV      ARG3, p3  @N@ \
+        MOV      ARG2, p2  @N@ \
+        MOV      ARG1, p1  @N@ \
+        call     callee
+# define CALLC4(callee, p1, p2, p3, p4)    \
+        MOV      ARG4, p4   @N@\
+        MOV      ARG3, p3   @N@\
+        MOV      ARG2, p2   @N@\
+        MOV      ARG1, p1   @N@\
+        call     callee
 #endif
 
 /* For stdcall callees */
@@ -822,8 +1064,23 @@ ASSUME fs:_DATA @N@\
 # endif
 # define INC(reg) add reg, reg, POUND 1
 # define DEC(reg) sub reg, reg, POUND 1
+#elif defined(RISCV64)
+# define REG_SCRATCH0 REG_A0
+# define REG_SCRATCH1 REG_A1
+# define REG_SCRATCH2 REG_A2
+# define JUMP     j
+# define JUMP_NOT_EQUAL(lhr, rhs) bne lhs, rhs,
+# define RETURN   ret
+# define INC(reg) addi reg, reg, 1
+# define DEC(reg) addi reg, reg, -1
 #endif /* X86/ARM */
 
 # define TRY_CXT_SETJMP_OFFS 0 /* offsetof(try_except_context_t, context) */
+
+#if defined(AARCH64) && defined(MACOS)
+#define HIDDEN(x) .private_extern x
+#else
+#define HIDDEN(x) .hidden x
+#endif
 
 #endif /* _ASM_DEFINES_ASM_ */

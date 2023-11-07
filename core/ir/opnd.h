@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2022 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -99,7 +99,10 @@ extern const reg_id_t dr_reg_fixer[];
 /* We only normally use r0-r5 but we support more in translation code */
 #    define REG_START_SPILL DR_REG_R0
 #    define REG_STOP_SPILL DR_REG_R10 /* r10 might be used in syscall mangling */
-#endif                                /* X86/ARM */
+#elif defined(RISCV64)
+#    define REG_START_SPILL DR_REG_A0
+#    define REG_STOP_SPILL DR_REG_A5
+#endif /* RISCV64 */
 #define REG_SPILL_NUM (REG_STOP_SPILL - REG_START_SPILL + 1)
 
 #ifndef INT8_MIN
@@ -222,6 +225,7 @@ opnd_create_sized_tls_slot(int offs, opnd_size_t size);
 /* This should be kept in sync w/ the defines in x86/x86.asm */
 enum {
 #ifdef X86
+    DR_SYSNUM_REG = DR_REG_EAX,
 #    ifdef X64
 #        ifdef UNIX
     /* SysV ABI calling convention */
@@ -266,19 +270,52 @@ enum {
     REGPARM_2 = DR_REG_R2,
     REGPARM_3 = DR_REG_R3,
 #    ifdef X64
+    DR_SYSNUM_REG = DR_REG_R8,
     REGPARM_4 = DR_REG_R4,
     REGPARM_5 = DR_REG_R5,
     REGPARM_6 = DR_REG_R6,
     REGPARM_7 = DR_REG_R7,
     NUM_REGPARM = 8,
 #    else
+    DR_SYSNUM_REG = DR_REG_R7,
     NUM_REGPARM = 4,
 #    endif /* 64/32 */
     REDZONE_SIZE = 0,
     REGPARM_MINSTACK = 0,
     REGPARM_END_ALIGN = 8,
+#elif defined(RISCV64)
+    DR_SYSNUM_REG = DR_REG_A7,
+    REGPARM_0 = DR_REG_A0,
+    REGPARM_1 = DR_REG_A1,
+    REGPARM_2 = DR_REG_A2,
+    REGPARM_3 = DR_REG_A3,
+    REGPARM_4 = DR_REG_A4,
+    REGPARM_5 = DR_REG_A5,
+    NUM_REGPARM = 6,
+    REDZONE_SIZE = 0,
+    REGPARM_MINSTACK = 0,
+    REGPARM_END_ALIGN = 8,
 #endif
 };
+
+#ifdef X86
+#    define MCXT_FLD_FIRST_REG xdi
+#    define MCXT_FLD_SYSNUM_REG xax
+#elif defined(AARCHXX)
+#    define MCXT_FLD_FIRST_REG r0
+#    ifdef X64
+#        ifdef MACOS
+#            define MCXT_FLD_SYSNUM_REG r16
+#        else
+#            define MCXT_FLD_SYSNUM_REG r8
+#        endif
+#    else
+#        define MCXT_FLD_SYSNUM_REG r7
+#    endif /* 64/32 */
+#elif defined(RISCV64)
+#    define MCXT_FLD_FIRST_REG x0
+#    define MCXT_FLD_SYSNUM_REG a7
+#endif
 extern const reg_id_t d_r_regparms[];
 
 /* arch-specific */
@@ -288,7 +325,12 @@ opnd_immed_float_arch(uint opcode);
 #ifdef AARCHXX
 #    define DR_REG_STOLEN_MIN IF_X64_ELSE(DR_REG_X9, DR_REG_R8) /* DR_REG_SYSNUM + 1 */
 #    define DR_REG_STOLEN_MAX IF_X64_ELSE(DR_REG_X29, DR_REG_R12)
-/* DR's stolen register for TLS access */
+/* DR's stolen register for TLS access. */
+extern reg_id_t dr_reg_stolen;
+#elif defined(RISCV64)
+#    define DR_REG_STOLEN_MIN DR_REG_X18 /* DR_REG_SYSNUM + 1 */
+#    define DR_REG_STOLEN_MAX DR_REG_X31
+/* DR's stolen register for TLS access. */
 extern reg_id_t dr_reg_stolen;
 #endif
 

@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2016-2021 Google, Inc.  All rights reserved.
+ * Copyright (c) 2016-2023 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -48,6 +48,9 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+
+namespace dynamorio {
+namespace drmemtrace {
 
 #define MAGIC_VALUE ((void *)(ptr_uint_t)0xdeadbeefUL)
 
@@ -196,7 +199,8 @@ post_process()
             dir.modfile_bytes_, parse_cb, process_cb, MAGIC_VALUE, free_cb);
         assert(module_mapper->get_last_error().empty());
         // Test back-compat of deprecated APIs.
-        raw2trace_t raw2trace(dir.modfile_bytes_, dir.in_files_, dir.out_files_, NULL);
+        raw2trace_t raw2trace(dir.modfile_bytes_, dir.in_files_, dir.out_files_,
+                              dir.out_archives_);
         std::string error =
             raw2trace.handle_custom_data(parse_cb, process_cb, MAGIC_VALUE, free_cb);
         assert(error.empty());
@@ -218,7 +222,9 @@ post_process()
     raw2trace_directory_t dir;
     std::string dir_err = dir.initialize(raw_dir, "");
     assert(dir_err.empty());
-    raw2trace_t raw2trace(dir.modfile_bytes_, dir.in_files_, dir.out_files_, dr_context,
+    raw2trace_t raw2trace(dir.modfile_bytes_, dir.in_files_, dir.out_files_,
+                          dir.out_archives_, dir.encoding_file_,
+                          dir.serial_schedule_file_, dir.cpu_schedule_file_, dr_context,
                           0);
     std::string error =
         raw2trace.handle_custom_data(parse_cb, process_cb, MAGIC_VALUE, free_cb);
@@ -229,7 +235,7 @@ post_process()
 }
 
 int
-main(int argc, const char *argv[])
+test_main(int argc, const char *argv[])
 {
     static int outer_iters = 2048;
     /* We trace a 4-iter burst of execution. */
@@ -274,3 +280,6 @@ main(int argc, const char *argv[])
     std::cerr << "all done\n";
     return 0;
 }
+
+} // namespace drmemtrace
+} // namespace dynamorio

@@ -1,6 +1,6 @@
 # DynamoRIO - Categorized Instruction Mix
 
-This repository contains a modified version of the DynamoRIO Opcode mix tool, designed for extracting a categorized instruction mix of an application. **This tool is no longer actively maintained and is considered deprecated.**
+This repository contains a modified version of the DynamoRIO Opcode mix tool, designed for extracting a categorized instruction mix of an application. The tool supports x86 and Arm binaries. It does not support Arm Scalable Vector Extension (SVE) instructions. **This tool is no longer actively maintained and is considered deprecated.**
 
 ## Usage
 
